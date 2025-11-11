@@ -1,0 +1,36 @@
+##########################BASIS DATA##############################
+#System name
+SYSTEM = OPTIMUS_PRIME
+#k-points
+KSPACING = 0.20
+#KGRIDS = 1 1 1
+#symmetry used
+Isym=2
+#nelements
+nele = 1
+#Finite difference order
+NORDER = 8
+#Switch for spin
+lspin= F
+#The order of smearing (2-5) , <=0 is fermi-dirac-like smearing
+Nsmear= -1
+#Width of broadening(eV.)
+Wsmear= 0.01
+#Number of simulate steps
+Nssp=1000
+#IOPM : 1:CG+ 2:L-BFGS 3:FIRE
+IOPM=3
+#For W-Y equation(eV)
+Chetol=1e-4
+penLam=1e-8
+##############################Diag################################
+#Chebyshev order [8,20]
+CheM0= 16
+CheM= 8
+#For add eigenstates to diag(H)
+nadds= 10
+#tolarence of drho in scf
+RTOL=1e-4
+#tolerance of total energy(eV)
+ETOL=1e-3
+############################THE END###############################

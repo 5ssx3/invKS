@@ -1,0 +1,224 @@
+MODULE invKS_module
+  USE constants
+  USE parameters , ONLY : wtol=>etol,gtol=>Rtol &
+             & ,iopt,nskip
+  USE struct_module, ONLY : lat=>lat_mat
+  IMPLICIT NONE
+  CONTAINS
+!>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  !##################################################!
+  !           SCF for screen potential               !
+  !##################################################!
+  !-------------------optim_potential-----------------
+  SUBROUTINE iks_optim_WY()
+     USE parameters , ONLY : nev,nssp,Idiag, Chetol,nspin,sigma=>Wsmear
+     USE grid_module , ONLY : nr1,nr2,nr3,nr,nk,kpt,nrs,eigen,grid
+     !USE scf_module , ONLY : smear_updaterho,kfilter,ksolver
+     USE smearing_module , ONLY : smear_init,Fermilevel,smear_updaterho &
+               & ,wke,fme,ets
+     USE struct_module , ONLY : ne_r,dvol,volume
+     USE chebyshev_module, ONLY : BuildSubspace,CheF_all
+     USE opt_module
+     IMPLICIT NONE
+     !IN/OUT
+     !LOCAL
+     REAL(DP) :: nwsp,penfun,fmed
+     INTEGER(I4B) :: Iter,m=10,Ifilter
+     !d
+     REAL(DP) :: drho,gNorm,dt=0.3_dp
+     !xqtest 
+     INTEGER(I4B) :: Is
+     REAL(DP) :: ngvec(nr)
+     !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+     SELECT CASE(Iopt)
+     CASE(1)
+        CALL initCG(nr)
+     CASE(2)
+        CALL initLBFGS(nr,m)
+     CASE default
+        CALL initFIRE(nr,dt)
+     END SELECT
+     !init
+     CALL smear_init(nev)
+     !first eigepairs
+     DO is=1,nspin
+        grid%veff(:,is)=grid%vef0(:)
+     ENDDO
+     CALL BuildSubspace(nr,nev,grid%veff,eigen)
+     CALL smear_updaterho(nr,nev,ne_r,eigen,grid%rhoS,grid%rho)
+     PRINT*,'Total electrons testing:',SUM(grid%rho)*dvol
+     !PRINT*,eigen%val(:,1,1)
+     maxWY : DO Iter=1,nssp
+        !WY functional
+        CALL iks_Ws(nr,grid%rho,grid%rho0,grid%veff(:,1) &
+           & ,eigen%val,wke,ets,nwsp,penfun,ngvec) 
+        !opt
+        SELECT CASE(Iopt)
+        CASE(1)
+           WRITE(*,*)'================== PERFORM CGplus =================='
+           CALL CGplus_optm(Iter,nr,grid%veff(:,1),nwsp,ngvec)
+           !PRINT*,ICALL,'Ws=',-nWs,'penalty=',penfun
+           !WRITE(*,*)'================= CHECK THE FLAG ================='
+           IF(IFLAG<=0.OR.ICALL>=10000)THEN
+              STOP
+           ELSE IF(IFLAG==1)THEN
+              ICALL=ICALL+1
+              !PRINT*,'Continue search'
+           ENDIF
+        CASE(2)
+           WRITE(*,*)'================== PERFORM BFGS =================='
+           myicount=myicount+1
+           CALL LBFGS_optm(Iter,nr,m,grid%veff(:,1),nwsp,ngvec)
+           print*,'LBFGS task :',task
+           !============================================
+           WRITE(*,*)'================= CHECK THE FLAG ================='
+           IF(task(1:5)=='NEW_X')THEN
+              nline=0
+              IF(myicount>maxcount)THEN
+                 PRINT*,'Maxcount BFGS is reached'
+                 OPEN(1111,FILE='Veff.dat')
+                     WRITE(1111,*) 'Ne',ne_r
+                     WRITE(1111,*) nr1,nr2,nr3
+                     WRITE(1111,*) grid%veff(:,1)*hart2eV
+                 CLOSE(1111)
+              ENDIF
+              !store current Ws
+              histW(1)=histW(2)
+              histW(2)=histW(3)
+              histW(3)=histW(4)
+              histW(4)=nwsp
+              IF(myicount>5)THEN
+                  IF(abs(histW(4)-histW(3))<wtol .AND. &
+                  &  abs(histW(3)-histW(2))<wtol .AND. &
+                  &  abs(histW(2)-histW(1))<wtol       &
+                  !&  gNorm<gtol) THEN
+                  &  ) THEN
+                     PRINT*,'Ws has reach the accury:',wtol*hart2eV,' eV'
+                     OPEN(1111,FILE='Veff.dat')
+                         WRITE(1111,*) 'Ne',ne_r
+                         WRITE(1111,*) nr1,nr2,nr3
+                         WRITE(1111,*) grid%veff(:,1)*hart2eV
+                     CLOSE(1111)
+                     !difference
+                     OPEN(200,FILE='RhoF.dat')
+                         WRITE(200,*) nr1,nr2,nr3
+                         WRITE(200,*) grid%rho(:)*volume
+                     CLOSE(200)
+
+                     IF(gNorm<gtol)THEN
+                        EXIT maxWY
+                     ELSE
+                        task='START'
+                     ENDIF
+                  ENDIF
+              ENDIF
+           ELSEIF(task(1:2)=='FG')THEN
+              IF(nline>0)THEN
+                 PRINT*,'TASK=FG, continue line search'
+              ENDIF
+              nline=nline+1
+           ELSE
+              PRINT*,'L-BFGS task warning , RE-START anyway,task=>'
+              PRINT*,task
+              task='START'
+              Chetol=Chetol*0.9d0
+           ENDIF
+        CASE default
+           WRITE(*,*)'================== PERFORM FIRE =================='
+           CALL FIRE_optm(nr,grid%veff(:,1),nwsp,ngvec)
+           myicount=myicount+1
+           histW(1)=histW(2)
+           histW(2)=histW(3)
+           histW(3)=histW(4)
+           histW(4)=nwsp
+           IF(myicount>5)THEN
+               IF(abs(histW(4)-histW(3))<wtol .AND. &
+               &  abs(histW(3)-histW(2))<wtol .AND. &
+               &  abs(histW(2)-histW(1))<wtol       &
+               &   )THEN
+                  PRINT*,'Ws has reach the accury:',wtol*hart2ev,' eV'
+                  OPEN(1111,FILE='Veff.dat')
+                      WRITE(1111,*) 'Ne',ne_r
+                      WRITE(1111,*) nr1,nr2,nr3
+                      WRITE(1111,*) grid%veff(:,:)*hart2eV
+                  CLOSE(1111)
+                  !difference
+                  OPEN(200,FILE='RhoF.dat')
+                      WRITE(200,*) nr1,nr2,nr3
+                      WRITE(200,*) grid%rho(:)*volume
+                  CLOSE(200)
+                  IF(gNorm<gtol)  EXIT maxWY
+               ENDIF
+           ENDIF
+           !============================================
+        END SELECT
+        !gnorm
+        gNorm=SUM(ABS(ngvec))/nr
+        drho=SUM(ABS(grid%rho-grid%rho0))/nr
+        PRINT*,Iter,'Ws(eV)=',-nwsp*hart2ev,'penalty(eV)=',penfun*hart2ev
+        PRINT*,'AverNorm/min/max(density difference) in a.u.'
+        PRINT*,drho,MINVAL(grid%rho-grid%rho0),MAXVAL(grid%rho-grid%rho0)
+        PRINT*,'AverNorm/min/max(nGvec) in a.u.'
+        PRINT*,gnorm,MINVAL(ngvec),MAXVAL(ngvec)
+        PRINT*,'Total rho difference should be 0:',SUM(grid%rho-grid%rho0)*dvol
+
+        !Getting next eiegnpairs by CheFSI
+        DO Ifilter=1,10
+           fmed=fme
+           CALL CheF_all(nr,nev,grid%veff,eigen)
+           !Find Fermi Level
+           CALL Fermilevel(ne_r,nev,nk,kpt%wk,eigen%val,sigma)
+           IF(ABS(fme-fmed)<Chetol) EXIT
+        ENDDO
+        !filter acucury
+        PRINT*,MIN(Ifilter,10),'Chebyshev Accury:',ABS(fme-fmed)*hart2ev,'eV'
+        CALL smear_updaterho(nr,nev,ne_r,eigen,grid%rhoS,grid%rho)
+     ENDDO maxWY
+     PRINT*,'Ws has reach the accury:',wtol*hart2ev,' eV'
+     OPEN(1111,FILE='Veff.dat')
+         WRITE(1111,*) 'Ne',ne_r
+         WRITE(1111,*) nr1,nr2,nr3
+         WRITE(1111,*) grid%veff(:,:)*hart2eV
+     CLOSE(1111)
+     !difference
+     OPEN(200,FILE='RhoF.dat')
+         WRITE(200,*) nr1,nr2,nr3
+         WRITE(200,*) grid%rho(:)*volume
+     CLOSE(200)
+     !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+  ENDSUBROUTINE iks_optim_WY
+!-------------------------PARTING LINE-------------------------
+  SUBROUTINE iks_Ws(nps,rho,rho0,vs,evals,wks,etpy,nwsp,penfun,ngvec)
+     USE parameters , ONLY : penLambda
+     USE finite_module , ONLY : real_pbc_nabla2,real_pbc_nabla1
+     USE grid_module , ONLY : nr
+     USE struct_module, ONLY: dvol
+     IMPLICIT NONE
+     !IN/OUT
+     INTEGER(I4B),INTENT(IN) :: nps
+     REAL(DP),INTENT(IN) :: rho(nps),rho0(nps),vs(nps)
+     REAL(DP),DIMENSION(:,:,:),INTENT(IN) :: &
+           &  evals  & !eigen-vaule
+           &, wks    !weight
+     REAL(DP),INTENT(IN) :: etpy !entropy
+     REAL(DP),INTENT(OUT) :: nwsp,penfun !-WY functional=-Ws
+     REAL(DP),INTENT(OUT) :: ngvec(nps)
+     !LOCAL
+     REAL(DP) :: dvs(3,nps),d2vs(nps) &!penalty function
+             &, Ws
+     !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+     !Penalty function Lambda*SUM(|\nabla V|^2)*dvol
+     CALL real_pbc_nabla1(vs,dvs)
+     CALL real_pbc_nabla2(vs,d2vs)
+     penfun= penLambda*SUM(dvs(:,:)*dvs(:,:))*dvol
+     !Ws=Es-TS+SUM( Vs(rho-rho0) ) *dvol= Eband-TS-SUM(vs*rho0)*dvol
+     Ws=SUM(wks*evals) - etpy - SUM(vs*rho0)*dvol
+     !L=-Ws + PF
+     nwsp= -Ws + penfun
+     !gradient of WY functional with penalty function
+     ngvec(:)=  rho0(:) - rho(:)  - 2.d0*penLambda*d2vs(:)
+     !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+  ENDSUBROUTINE iks_Ws
+
+!-------------------------PARTING LINE-------------------------
+ENDMODULE invKS_module
