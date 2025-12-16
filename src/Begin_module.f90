@@ -34,22 +34,6 @@ CONTAINS
      CALL Build_kgrid()
 #ifdef MPI
       CALL smpi_init_2D()
-      !debug
-      CALL MPI_Barrier(parallel%comm, mpinfo)
-      WRITE(6, '(A,I0,A,I0,A,I0)') "[DEBUG] Process ", parallel%myid, &
-                                    ": commx_numprocs = ", parallel%commx_numprocs, &
-                                    ", commx_myid = ", parallel%commx_myid
-      WRITE(6, '(A,I0,A,I0,A,I0)') "[DEBUG] Process ", parallel%myid, &
-                                    ": commy_numprocs = ", parallel%commy_numprocs, &
-                                    ", commy_myid = ", parallel%commy_myid
-      WRITE(6, '(A,I0,A,I0,A,I0)') "[DEBUG] Process ", parallel%myid, &
-                                    ": rankx = ", parallel%rankx, ", ranky = ", parallel%ranky
-      WRITE(*, '(A,I0,A,I0,I0,I0,I0)') &
-         '[DEBUG] Process ', parallel%myid, &
-         ': comm/comm2d/commx/commy=', parallel%comm, &
-         parallel%comm2d, parallel%commx, parallel%commy
-      !PRINT*,'rank2sum=',parallel%comm2d_rank2sum
-      CALL MPI_Barrier(parallel%comm, mpinfo)
 #endif
      !creat eigen-data
      CALL Build_eigen()

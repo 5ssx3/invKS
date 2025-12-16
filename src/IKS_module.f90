@@ -58,17 +58,16 @@ MODULE invKS_module
       CALL smear_updaterho(nr,nev,ne_r,eigen,grid%rhoS,grid%rho)
 
 #ifdef MPI
+      IF (ALLOCATED(recvcounts)) DEALLOCATE(recvcounts)
+      IF (ALLOCATED(displs)) DEALLOCATE(displs)
+      ALLOCATE(recvcounts(parallel%commy_numprocs))
+      ALLOCATE(displs(parallel%commy_numprocs))
       IF (parallel%isroot) THEN
 #endif
       PRINT*,'Total electrons testing:',SUM(grid%rho)*dvol
 #ifdef MPI
    ENDIF
 #endif
-      !
-      PRINT*,'process:',parallel%myid,'stop before maxWY loop'
-      CALL MPI_BARRIER(parallel%comm,mpinfo)
-      STOP
-      !
      !PRINT*,eigen%val(:,1,1)
      maxWY : DO Iter=1,nssp
         !WY functional
@@ -155,6 +154,7 @@ MODULE invKS_module
          ENDIF
 #endif
             CALL FIRE_optm(nr,grid%veff(:,1),nwsp,ngvec)
+            ! PRINT*,'process:',parallel%myid,'Iter=',Iter,'grid%Veff(1:5,1)=', grid%veff(1:5,1)
            myicount=myicount+1
            histW(1)=histW(2)
            histW(2)=histW(3)
@@ -206,10 +206,12 @@ MODULE invKS_module
         !Getting next eiegnpairs by CheFSI
         DO Ifilter=1,10
            fmed=fme
+            ! PRINT*,'process:',parallel%myid,'Ifilter=',Ifilter
             CALL CheF_all(nr,nev,grid%veff,eigen)
             !Find Fermi Level
 #ifdef MPI
-            CALL Fermilevel(ne_r,parallel%nstate_proc,parallel%mygrid_range(3),kpt%wk,eigen%val,sigma)
+            ! PRINT*, 'process',parallel%myid,'Calling Fermilevel in iks_optim_WY'
+            CALL Fermilevel(ne_r,nev,parallel%mygrid_range(3),kpt%wk,eigen%val,sigma)
 #else
             CALL Fermilevel(ne_r,nev,nk,kpt%wk,eigen%val,sigma)
 #endif           
@@ -223,11 +225,8 @@ MODULE invKS_module
 #ifdef MPI
    ENDIF
 #endif
-#ifdef MPI
-      CALL smear_updaterho(nr,parallel%nstate_proc,ne_r,eigen,grid%rhoS,grid%rho)
-#else
+
       CALL smear_updaterho(nr,nev,ne_r,eigen,grid%rhoS,grid%rho)
-#endif
 
      ENDDO maxWY
      !
@@ -285,7 +284,7 @@ MODULE invKS_module
       !Ws=Es-TS+SUM( Vs(rho-rho0) ) *dvol= Eband-TS-SUM(vs*rho0)*dvol
 #ifdef MPI
       Ws_local=SUM(wks*evals)
-      CALL MPI_ALLREDUCE(Ws_local,Ws,1,MPI_REAL8,MPI_SUM,parallel%comm,mpinfo)
+      CALL MPI_ALLREDUCE(Ws_local,Ws,1,MPI_REAL8,MPI_SUM,parallel%commx,mpinfo)
       Ws=Ws - etpy - SUM(vs*rho0)*dvol
 #else
       Ws=SUM(wks*evals) - etpy - SUM(vs*rho0)*dvol

@@ -305,29 +305,9 @@ CONTAINS
    IF (.NOT. ALLOCATED(parallel%global_gridrange)) ALLOCATE(parallel%global_gridrange(3,parallel%commx_numprocs))
    CALL grid_split(nk,parallel%commx_numprocs,parallel%commx,parallel%commx_myid,parallel%mygrid_range,parallel%recvcounts,parallel%displs,parallel%global_gridrange)
       ! Print the grid_split results (for each process)
-      CALL MPI_Barrier(parallel%comm, mpinfo)
-      WRITE(6, '(A,I0,A,3I0)') "[DEBUG] Process ", parallel%myid, &
-                              ": mygrid_range (start,end,num) = ", parallel%mygrid_range
-      IF (ALLOCATED(parallel%recvcounts)) THEN
-         WRITE(6, '(A,I0,A,100I0)') "[DEBUG] Process ", parallel%myid, &
-                                    ": recvcounts = ", parallel%recvcounts(1:MIN(10, SIZE(parallel%recvcounts)))
-      ELSE
-         WRITE(6, '(A,I0)') "[DEBUG] Process ", parallel%myid, ": recvcounts not allocated!"
-      ENDIF
-      CALL MPI_Barrier(parallel%comm, mpinfo)
       
    CALL array_split(nev, parallel%commy_numprocs, parallel%commy, parallel%commy_myid, parallel%nstate_proc, parallel%sub2sum)
       ! Print the results of array_split (for each process)
-      CALL MPI_Barrier(parallel%comm, mpinfo)
-      WRITE(6, '(A,I0,A,I0)') "[DEBUG] Process ", parallel%myid, &
-                              ": nstate_proc = ", parallel%nstate_proc
-      IF (ALLOCATED(parallel%sub2sum)) THEN
-         WRITE(6, '(A,I0,A,100I0)') "[DEBUG] Process ", parallel%myid, &
-                                    ": sub2sum(1:nstate_proc) = ", parallel%sub2sum(1:parallel%nstate_proc,parallel%commy_myid+1)
-      ELSE
-         WRITE(6, '(A,I0)') "[DEBUG] Process ", parallel%myid, ": sub2sum not allocated!"
-      ENDIF
-      CALL MPI_Barrier(parallel%comm, mpinfo)
 #endif
      CALL destroy_eigen()
      IF(IGamma<=0)THEN
@@ -357,7 +337,6 @@ CONTAINS
         ENDDO
          IF (has_gamma) THEN
             ALLOCATE(eigen%wvfG(nr, parallel%nstate_proc, Nspin))
-            WRITE(6, '(A,I0,A,I0)') "[INFO] Process ", parallel%myid, " allocates wvfG for gamma point k=", IGamma
          ENDIF
 #else
          ALLOCATE(eigen%wvf(nr,nev,nk-1,Nspin))

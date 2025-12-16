@@ -210,7 +210,7 @@ CONTAINS
       INTEGER(I4B) :: Ik_global
 #endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-      PRINT*,'process:',parallel%myid,'Entering CheF_all'
+      ! PRINT*,'process:',parallel%myid,'Entering CheF_all'
       DO Is=1,nspin
 #ifdef MPI
       DO Ik=1,parallel%mygrid_range(3)
@@ -259,7 +259,7 @@ CONTAINS
       REAL(DP),DIMENSION(nev,nev) :: Shat,Hhat,Qs
 #endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-      PRINT*,'process:',parallel%myid,'Entering real_first_RRstep'
+      ! PRINT*,'process:',parallel%myid,'Entering real_first_RRstep'
       !Raleigh-Ritz step
       IF(LRROrthNorm)THEN
          !OrthNorm
@@ -326,7 +326,7 @@ CONTAINS
       REAL(DP) :: T(k,k),evec(k,k),eval(k)
       INTEGER(I4B) :: J,Nj
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-      PRINT*,'process:',parallel%myid,'Entering real_init_uplow'
+      ! PRINT*,'process:',parallel%myid,'Entering real_init_uplow'
       T(:,:)=0.d0
       Nj=MIN(k,10)
       !
@@ -387,7 +387,7 @@ CONTAINS
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !low up bound
 #ifdef MPI
-      PRINT*,'process:',parallel%myid,'Entering real_first_filter'
+      ! PRINT*,'process:',parallel%myid,'Entering real_first_filter'
       vec(:)=X(:,nst)
       BCAST_ID_local = -1
       BCAST_ID = -1
@@ -399,7 +399,7 @@ CONTAINS
       CALL MPI_BCAST(a,1,MPI_REAL8,BCAST_ID,parallel%commy,mpinfo)
       CALL MPI_BCAST(al,1,MPI_REAL8,BCAST_ID,parallel%commy,mpinfo)
       CALL MPI_BCAST(b,1,MPI_REAL8,BCAST_ID,parallel%commy,mpinfo)
-      PRINT*,'process',parallel%myid,'compeleted MPI_BCAST in real_first_filter'
+      ! PRINT*,'process',parallel%myid,'compeleted MPI_BCAST in real_first_filter'
 #else
       vec(:)=X(:,nst)
       CALL real_init_uplow(nps,7,veff,vec,a,b,al)
@@ -410,7 +410,7 @@ CONTAINS
       DO I=1,Niter
          !
          CALL real_chebyshev_filter_scaled(nps,nst,veff,X,CF0,a,b,al)
-         PRINT*,'process',parallel%myid,'compeleted real_chebyshev_filter_scaled in real_first_filter'
+         ! PRINT*,'process',parallel%myid,'compeleted real_chebyshev_filter_scaled in real_first_filter'
          IF(LRROrthNorm)THEN
             !OrthNorm
             CALL lapk_OrthNorm(X)
@@ -421,9 +421,9 @@ CONTAINS
          ELSE
             !Overlap matrix
 #ifdef MPI
-            PRINT*,'process',parallel%myid,'started to call scalapk_MM(X,X) in real_first_filter'
+            ! PRINT*,'process',parallel%myid,'started to call scalapk_MM(X,X) in real_first_filter'
             CALL scalapk_MM(X,X,'T','N',1.0_dp,0.0_dp,Shat_local)
-            PRINT*,'process',parallel%myid,'compeleted scalapk_MM(X,X) in real_first_filter'
+            ! PRINT*,'process',parallel%myid,'compeleted scalapk_MM(X,X) in real_first_filter'
             IF (ALLOCATED(displs)) DEALLOCATE(displs)
             IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
             ALLOCATE(displs(parallel%commy_numprocs))
@@ -437,7 +437,7 @@ CONTAINS
             ENDDO
             CALL MPI_ALLGATHERV(Shat_local, nev*nst, MPI_REAL8, &
                               Shat,recevcounts,displs,MPI_REAL8,parallel%commy,mpinfo)
-            PRINT*,'process',parallel%myid,'compeleted MPI_ALLGATHERV in real_first_filter'
+            ! PRINT*,'process',parallel%myid,'compeleted MPI_ALLGATHERV in real_first_filter'
 #else
             CALL lapk_MM(X,X,'T','N',1.0_dp,0.0_dp,Shat)
 #endif
@@ -446,7 +446,7 @@ CONTAINS
             !eigen-decomposion
 #ifdef MPI
             CALL lapk_Eigen(nev,Hhat,Shat,Qs,eval)
-            PRINT*,'process',parallel%myid,'compeleted lapk_Eigen in real_first_filter'
+            ! PRINT*,'process',parallel%myid,'compeleted lapk_Eigen in real_first_filter'
 #else
             CALL lapk_Eigen(nst,Hhat,Shat,Qs,eval)
 #endif
@@ -467,12 +467,12 @@ CONTAINS
       s_end = parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1)
       Qs_local = Qs(:,s_start:s_end)
       CALL scalapk_MM(X,Qs_local,'N','N',1.0_dp,0.0_dp,Xnew)
-      PRINT*,'process',parallel%myid,'compeleted lapk_MM(X,Qs_local) in real_first_filter'
+      ! PRINT*,'process',parallel%myid,'compeleted lapk_MM(X,Qs_local) in real_first_filter'
 #else
       CALL lapk_MM(X,Qs,'N','N',1.0_dp,0.0_dp,Xnew)
 #endif
       X=Xnew
-      PRINT*,'process:',parallel%myid,'completed X=Xnew in real_first_filter'
+      ! PRINT*,'process:',parallel%myid,'completed X=Xnew in real_first_filter'
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE real_first_filter
    !----------------------------------------------------------
@@ -489,9 +489,9 @@ CONTAINS
       COMPLEX(DP) :: Xnew(nps,nev)
       COMPLEX(DP),DIMENSION(nev,nev) :: Shat,Hhat,Qs
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-#ifdef MPI
-      PRINT*,'process:',parallel%myid,'Entering cmplx_first_RRstep'
-#endif
+! #ifdef MPI
+!       PRINT*,'process:',parallel%myid,'Entering cmplx_first_RRstep'
+! #endif
       !Raleigh-Ritz step
       IF(LRROrthNorm)THEN
          !OrthNorm
@@ -535,9 +535,9 @@ CONTAINS
       REAL(DP) :: eval(k)
       INTEGER(I4B) :: J,Nj
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-#ifdef MPI
-      PRINT*,'process:',parallel%myid,'Entering cmplx_init_uplow'
-#endif
+! #ifdef MPI
+!       PRINT*,'process:',parallel%myid,'Entering cmplx_init_uplow'
+! #endif
       T(:,:)=0.d0
       Nj=MIN(k,10)
       !
@@ -598,8 +598,8 @@ CONTAINS
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !low up bound
 #ifdef MPI
-      PRINT*,'process:',parallel%myid,'Entering cmplx_first_filter'
-      PRINT*,'process:',parallel%myid,'size(X)=',SIZE(X,1),SIZE(X,2)
+      ! PRINT*,'process:',parallel%myid,'Entering cmplx_first_filter'
+      ! PRINT*,'process:',parallel%myid,'size(X)=',SIZE(X,1),SIZE(X,2)
       vec(:)=X(:,nst)
       IF (parallel%commy_numprocs > 1) THEN
          BCAST_ID_local = -1
@@ -612,7 +612,7 @@ CONTAINS
          CALL MPI_BCAST(a,1,MPI_REAL8,BCAST_ID,parallel%commy,mpinfo)
          CALL MPI_BCAST(al,1,MPI_REAL8,BCAST_ID,parallel%commy,mpinfo)
          CALL MPI_BCAST(b,1,MPI_REAL8,BCAST_ID,parallel%commy,mpinfo)
-         PRINT*,'process',parallel%myid,'completed MPI_BCAST in cmplx_first_filter'
+         ! PRINT*,'process',parallel%myid,'completed MPI_BCAST in cmplx_first_filter'
       ELSE
          CALL cmplx_init_uplow(nps,7,Ik,veff,vec,a,b,al)
       ENDIF
@@ -625,7 +625,7 @@ CONTAINS
       DO I=1,Niter
          !
          CALL cmplx_chebyshev_filter_scaled(nps,nst,Ik,veff,X,CF0,a,b,al)
-         PRINT*,'process',parallel%myid,'completed cmplx_chebyshev_filter_scaled in cmplx_first_filter'
+         ! PRINT*,'process',parallel%myid,'completed cmplx_chebyshev_filter_scaled in cmplx_first_filter'
          IF(LRROrthNorm)THEN
             !OrthNorm
             CALL lapk_OrthNorm(X)
@@ -635,9 +635,9 @@ CONTAINS
             CALL lapk_Eigen(Hhat,Qs,eval)
          ELSE
 #ifdef MPI
-            PRINT*,'process',parallel%myid,'started to call scalapk_MM(X,X) in cmplx_first_filter'
+            ! PRINT*,'process',parallel%myid,'started to call scalapk_MM(X,X) in cmplx_first_filter'
             CALL scalapk_MM(X, X,'C','N', cmplx(1._dp,0._dp,DCP), cmplx(0._dp,0._dp,DCP), Shat_local)
-            PRINT*,'process',parallel%myid,'completed scalapk_MM(X,X) in cmplx_first_filter'
+            ! PRINT*,'process',parallel%myid,'completed scalapk_MM(X,X) in cmplx_first_filter'
             IF (ALLOCATED(displs)) DEALLOCATE(displs)
             IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
             ALLOCATE(displs(parallel%commy_numprocs))
@@ -651,17 +651,17 @@ CONTAINS
             ENDDO
             CALL MPI_ALLGATHERV(Shat_local, nev*nst, MPI_DOUBLE_COMPLEX, &
                               Shat,recevcounts,displs,MPI_DOUBLE_COMPLEX,parallel%commy,mpinfo)
-            PRINT*,'process',parallel%myid,'compeleted MPI_ALLGATHERV in cmplx_first_filter'
+            ! PRINT*,'process',parallel%myid,'compeleted MPI_ALLGATHERV in cmplx_first_filter'
 #else
             CALL lapk_MM(X,X,'T','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Shat)
 #endif
             !projected hamiltonian
             CALL cmplx_Rayleigh_quotient(nps,nst,Ik,veff,X,Hhat)
-            PRINT*,'process',parallel%myid,'completed cmplx_Rayleigh_quotient in cmplx_first_filter'
+            ! PRINT*,'process',parallel%myid,'completed cmplx_Rayleigh_quotient in cmplx_first_filter'
             !eigen-decomposion
 #ifdef MPI
             CALL lapk_Eigen(nev,Hhat,Shat,Qs,eval)
-            PRINT*,'process',parallel%myid,'completed lapk_Eigen in cmplx_first_filter'
+            ! PRINT*,'process',parallel%myid,'completed lapk_Eigen in cmplx_first_filter'
 #else
             CALL lapk_Eigen(nst,Hhat,Shat,Qs,eval)
 #endif
@@ -682,13 +682,13 @@ CONTAINS
       s_end = parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1)
       Qs_local = Qs(:,s_start:s_end)
       CALL scalapk_MM(X,Qs_local,'N','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Xnew)
-      PRINT*,'process',parallel%myid,'completed scalapk_MM(X,Qs_local) in cmplx_first_filter'
+      ! PRINT*,'process',parallel%myid,'completed scalapk_MM(X,Qs_local) in cmplx_first_filter'
 #else
       CALL lapk_MM(X,Qs,'N','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Xnew)
 #endif
       X=Xnew
       !
-      PRINT*,'process:',parallel%myid,'completed X=Xnew cmplx_first_filter'
+      ! PRINT*,'process:',parallel%myid,'completed X=Xnew cmplx_first_filter'
       !
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE cmplx_first_filter
@@ -713,9 +713,9 @@ CONTAINS
       REAL(DP) :: xhx_temp(nst,nst), xhx_local(nev,nst),V_q(nps,nst)
 #endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-      PRINT*,'process:',parallel%myid,'Entering real_Rayleigh_quotient'
+      ! PRINT*,'process:',parallel%myid,'Entering real_Rayleigh_quotient'
       CALL real_HX(nps,nst,veff,x,hx)
-      PRINT*,'process:',parallel%myid,'completed real_HX in real_Rayleigh_quotient'
+      ! PRINT*,'process:',parallel%myid,'completed real_HX in real_Rayleigh_quotient'
 #ifdef MPI
       xhx_local = 0.0_DP
       xhx_temp = 0.0_DP
@@ -731,9 +731,9 @@ CONTAINS
                CALL MPI_Abort(parallel%commy, 1, mpinfo)
             ENDIF
             CALL lapk_MM(V_q, hx, 'T', 'N', 1._dp, 0._dp, xhx_temp)
-            PRINT*,'process:',parallel%myid,'completed lapk_MM(V_q, hx) in real_Rayleigh_quotient'
+            ! PRINT*,'process:',parallel%myid,'completed lapk_MM(V_q, hx) in real_Rayleigh_quotient'
             xhx_local(q*nst+1:(q+1)*nst, :) = xhx_temp
-            PRINT*,'process:',parallel%myid,'completed xhx_local(q*nst+1:(q+1)*nst, :) = xhx_temp in real_Rayleigh_quotient, q=',q
+            ! PRINT*,'process:',parallel%myid,'completed xhx_local(q*nst+1:(q+1)*nst, :) = xhx_temp in real_Rayleigh_quotient, q=',q
          ENDDO
       IF (ALLOCATED(displs)) DEALLOCATE(displs)
       IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
@@ -746,7 +746,7 @@ CONTAINS
          displs(q) = recevcounts(q-1) + displs(q-1)
       ENDDO
       CALL MPI_ALLGATHERV(xhx_local,nst*nev,MPI_REAL8,xhx,recevcounts,displs,MPI_REAL8,parallel%commy,mpinfo)
-      PRINT*,'process:',parallel%myid,'completed MPI_ALLGATHERV(xhx) in real_Rayleigh_quotient'
+      ! PRINT*,'process:',parallel%myid,'completed MPI_ALLGATHERV(xhx) in real_Rayleigh_quotient'
       DEALLOCATE(displs, recevcounts)
 #else
       CALL lapk_MM(x,hx,'T','N',1._dp,0._dp,xhx)
@@ -902,26 +902,50 @@ CONTAINS
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE real_chebyshev_filter_scaled
    !-----------------------GRayleigh_Ritz--------------------------
-   SUBROUTINE real_GRayleigh_Ritz(nps,nev,veff,X,D)
+   SUBROUTINE real_GRayleigh_Ritz(nps,nst,veff,X,D)
       USE Lapack_module , ONLY : lapk_Eigen,lapk_MM
       IMPLICIT NONE
       !IN/OUT
-      INTEGER(I4B),INTENT(IN) :: nps,nev
+      INTEGER(I4B),INTENT(IN) :: nps,nst
       REAL(DP),INTENT(IN) :: veff(nps)
-      REAL(DP),INTENT(INOUT) :: X(nps,nev)
+      REAL(DP),INTENT(INOUT) :: X(nps,nst)
       REAL(DP),INTENT(OUT) :: D(:)
       !
       REAL(DP),DIMENSION(nev,nev) :: S_hat,H_hat,Q
-      REAL(DP) :: Xnew(nps,nev)
+      REAL(DP) :: Xnew(nps,nst)
+#ifdef MPI
+      REAL(DP) :: S_hat_local(nev,nst), Q_local(nev,nst)
+      INTEGER(I4B) :: j, s_end, s_start
+#endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !Calculate the overlap matrix
+#ifdef MPI
+      CALL scalapk_MM(X,X,'T','N',1._dp,0._dp,S_hat_local)
+      CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4, &
+                        recvcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
+      displs(1) = 0
+      recvcounts = nev * recvcounts
+      DO j = 2,parallel%commy_numprocs
+         displs(j) = displs(j-1) +recvcounts(j-1)
+      ENDDO
+      CALL MPI_ALLGATHERV(S_hat_local, nev*nst, MPI_REAL8, &
+                        S_hat,recvcounts,displs,MPI_REAL8,parallel%commy,mpinfo)
+#else
       CALL lapk_MM(X,X,'T','N',1._dp,0._dp,S_hat)
+#endif
       !Calculate the project hamiltion
-      CALL real_Rayleigh_quotient(nps,nev,veff,X,H_hat)
+      CALL real_Rayleigh_quotient(nps,nst,veff,X,H_hat)
       !solve the generalized eigenvalue problem
       CALL lapk_Eigen(nev,H_hat,S_hat,Q,D)
       !X=XQ
+#ifdef MPI
+      s_start = parallel%sub2sum(1,parallel%commy_myid+1)
+      s_end = parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1)
+      Q_local = Q(:,s_start:s_end)
+      CALL scalapk_MM(X,Q_local,'N','N',1._dp,0._dp,Xnew)
+#else
       CALL lapk_MM(X,Q,'N','N',1._dp,0._dp,Xnew)
+#endif
       X=Xnew
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE real_GRayleigh_Ritz
@@ -950,30 +974,50 @@ CONTAINS
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE real_Rayleigh_Ritz
    !-----------------non-OrthNorm Chebyshev_filter ----------------
-   SUBROUTINE real_filtering(nps,nev,veff,X,D)
-      USE parameters , ONLY : LRROrthNorm
+   SUBROUTINE real_filtering(nps,nst,veff,X,D)
+      USE parameters , ONLY : LRROrthNorm, nev
       !To avoid OrthNorm
       IMPLICIT NONE
-      INTEGER(I4B),INTENT(IN) :: nps,nev
+      INTEGER(I4B),INTENT(IN) :: nps,nst
       REAL(DP),INTENT(IN) :: veff(nps)
-      REAL(DP),INTENT(INOUT) :: X(nps,nev)
+      REAL(DP),INTENT(INOUT) :: X(nps,nst)
       REAL(DP),INTENT(INOUT) :: D(:)  !rayleigh-ritz value
       !LOCAL
       REAL(DP) :: a,b,al
+#ifdef MPI
+      INTEGER(I4B) :: BCAST_ID_local, BCAST_ID
+#endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       a=MAXVAL(D)
       al=MINVAL(D)
       !up boundary
-      CALL real_Estupb(nps,7,veff,X(:,nev),b)
+#ifdef MPI
+      BCAST_ID_local = -1
+      BCAST_ID = -1
+      b=0.0_DP
+      IF (parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1) == nev) THEN
+         CALL real_Estupb(nps,7,veff,X(:,nst),b)
+         BCAST_ID_local = parallel%commy_myid
+      ENDIF
+      CALL MPI_ALLREDUCE(BCAST_ID_local,BCAST_ID,1,MPI_INTEGER4,MPI_MAX,parallel%commy,mpinfo)
+      IF (mpinfo /= 0) THEN
+         PRINT*,'ERROR: process',parallel%myid, 'MPI_ALLREDUCE failed! mpinfo=',mpinfo
+         PRINT*,'  parallel%commy=',parallel%commy
+         CALL MPI_Abort(parallel%commy, 1, mpinfo)
+      ENDIF
+      CALL MPI_BCAST(b,1,MPI_REAL8,BCAST_ID,parallel%commy,mpinfo)
+#else
+      CALL real_Estupb(nps,7,veff,X(:,nst),b)
+#endif
       !filtering (a,b) 
-      CALL real_chebyshev_filter_scaled(nps,nev,veff,X,CheM,a,b,al)
+      CALL real_chebyshev_filter_scaled(nps,nst,veff,X,CheM,a,b,al)
       !CALL chebyshev_filter_real(nps,nev,veff,X,CheM,a,b)
       IF(LRROrthNorm)THEN
          !RR (Rayleigh-Ritz Step)
-         CALL real_Rayleigh_Ritz(nps,nev,veff,X,D)
+         CALL real_Rayleigh_Ritz(nps,nst,veff,X,D)
       ELSE
          !GRR (Rayleigh-Ritz Step)
-         CALL real_GRayleigh_Ritz(nps,nev,veff,X,D)
+         CALL real_GRayleigh_Ritz(nps,nst,veff,X,D)
       ENDIF
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE real_filtering
@@ -1141,26 +1185,50 @@ CONTAINS
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE cmplx_chebyshev_filter_scaled
    !-----------------------GRayleigh_Ritz--------------------------
-   SUBROUTINE cmplx_GRayleigh_Ritz(nps,nev,Ik,veff,X,D)
-      USE Lapack_module , ONLY : lapk_Eigen,lapk_MM
+   SUBROUTINE cmplx_GRayleigh_Ritz(nps,nst,Ik,veff,X,D)
+      USE Lapack_module , ONLY : lapk_Eigen, lapk_MM
       IMPLICIT NONE
       !IN/OUT
-      INTEGER(I4B),INTENT(IN) :: nps,nev,Ik
+      INTEGER(I4B),INTENT(IN) :: nps,nst,Ik
       REAL(DP),INTENT(IN) :: veff(nps)
-      COMPLEX(DCP),INTENT(INOUT) :: X(nps,nev)
+      COMPLEX(DCP),INTENT(INOUT) :: X(nps,nst)
       REAL(DP),INTENT(OUT) :: D(:)
       !
       COMPLEX(DCP),DIMENSION(nev,nev) :: S_hat,H_hat,Q
-      COMPLEX(DCP) :: Xnew(nps,nev)
+      COMPLEX(DCP) :: Xnew(nps,nst)
+#ifdef MPI
+      COMPLEX(DCP) :: S_hat_local(nev,nst), Q_local(nev,nst)
+      INTEGER(I4B) :: j, s_end, s_start
+#endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !Calculate the overlap matrix
+#ifdef MPI
+      CALL scalapk_MM(X,X,'C','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),S_hat_local)
+      CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4, &
+                        recvcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
+      displs(1) = 0
+      recvcounts = nev * recvcounts
+      DO j = 2,parallel%commy_numprocs
+         displs(j) = recvcounts(j-1) + displs(j-1)
+      ENDDO
+      CALL MPI_ALLGATHERV(S_hat_local, nev*nst, MPI_DOUBLE_COMPLEX, &
+                        S_hat,recvcounts,displs,MPI_DOUBLE_COMPLEX,parallel%commy,mpinfo)
+#else
       CALL lapk_MM(X,X,'T','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),S_hat)
+#endif
       !Calculate the project hamiltion
-      CALL cmplx_Rayleigh_quotient(nps,nev,Ik,veff,X,H_hat)
+      CALL cmplx_Rayleigh_quotient(nps,nst,Ik,veff,X,H_hat)
       !solve the generalized eigenvalue problem
       CALL lapk_Eigen(nev,H_hat,S_hat,Q,D)
       !X=XQ
+#ifdef MPI
+      s_start = parallel%sub2sum(1,parallel%commy_myid+1)
+      s_end = parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1)
+      Q_local = Q(:,s_start:s_end)
+      CALL scalapk_MM(X,Q_local,'N','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Xnew)
+#else 
       CALL lapk_MM(X,Q,'N','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Xnew)
+#endif
       X=Xnew
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE cmplx_GRayleigh_Ritz
@@ -1176,18 +1244,13 @@ CONTAINS
       COMPLEX(DCP) :: Xnew(nps,sn)
       COMPLEX(DCP),DIMENSION(sn,sn) :: Hhat,Qs
 #ifdef MPI
-      REAL(DP) :: norm_local, norm_global
-      INTEGER(I4B) :: i
+      COMPLEX(DP) :: Qs_local(nev,sn)
+      INTEGER(I4B) :: s_end, s_start
 #endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !F0:OrthNorm
 #ifdef MPI
-      DO i=1,sn
-          norm_local = SUM(ABS(X(:,i))**2)
-          CALL MPI_ALLREDUCE(norm_local, norm_global, 1, MPI_REAL8, MPI_SUM, parallel%comm, mpinfo)
-          X(:,i) = X(:,i) / SQRT(norm_global)
-      ENDDO
-      CALL lapk_OrthNorm(X)
+      CALL scalapk_OrthNorm(X)
 #else
       CALL lapk_OrthNorm(X)
 #endif
@@ -1197,35 +1260,56 @@ CONTAINS
       CALL lapk_Eigen(Hhat,Qs,D)
       !F3:X=XQ
       !X=MATMUL( X , Q )
+#ifdef MPI
+      s_start = parallel%sub2sum(1,parallel%commy_myid+1)
+      s_end = parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1)
+      Qs_local = Qs(:,s_start:s_end)
+      CALL scalapk_MM(X,Qs_local,'N','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Xnew)
+#else
       CALL lapk_MM(X,Qs,'N','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Xnew)
+#endif
       X=Xnew
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE cmplx_Rayleigh_Ritz
    !-----------------non-OrthNorm Chebyshev_filter ----------------
-   SUBROUTINE cmplx_filtering(nps,nev,Ik,veff,X,D)
+   SUBROUTINE cmplx_filtering(nps,nst,Ik,veff,X,D)
       USE parameters , ONLY : LRROrthNorm
       !To avoid OrthNorm
       IMPLICIT NONE
-      INTEGER(I4B),INTENT(IN) :: nps,nev,Ik
+      INTEGER(I4B),INTENT(IN) :: nps,nst,Ik
       REAL(DP),INTENT(IN) :: veff(nps)
-      COMPLEX(DCP),INTENT(INOUT) :: X(nps,nev)
+      COMPLEX(DCP),INTENT(INOUT) :: X(nps,nst)
       REAL(DP),INTENT(INOUT) :: D(:)  !rayleigh-ritz value
       !LOCAL
       REAL(DP) :: a,b,al
+#ifdef MPI
+      INTEGER(I4B) :: BCAST_ID_local, BCAST_ID
+#endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       a=MAXVAL(D)
       al=MINVAL(D)
       !up boundary
-      CALL cmplx_Estupb(nps,7,Ik,veff,X(:,nev),b)
+#ifdef MPI
+      BCAST_ID_local = -1
+      BCAST_ID = -1
+      IF (parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1) == nev) THEN
+         CALL cmplx_Estupb(nps,7,Ik,veff,X(:,nst),b)
+         BCAST_ID_local = parallel%commy_myid
+      ENDIF
+      CALL MPI_ALLREDUCE(BCAST_ID_local,BCAST_ID,1,MPI_INTEGER4,MPI_MAX,parallel%commy,mpinfo)
+      CALL MPI_BCAST(b,1,MPI_REAL8,BCAST_ID,parallel%commy,mpinfo)
+#else
+      CALL cmplx_Estupb(nps,7,Ik,veff,X(:,nst),b)
+#endif
       !filtering (a,b) 
-      CALL cmplx_chebyshev_filter_scaled(nps,nev,Ik,veff,X,CheM,a,b,al)
+      CALL cmplx_chebyshev_filter_scaled(nps,nst,Ik,veff,X,CheM,a,b,al)
       !CALL chebyshev_filter_real(nps,nev,veff,X,CheM,a,b)
       IF(LRROrthNorm)THEN
          !RR (Rayleigh-Ritz Step)
-         CALL cmplx_Rayleigh_Ritz(nps,nev,Ik,veff,X,D)
+         CALL cmplx_Rayleigh_Ritz(nps,nst,Ik,veff,X,D)
       ELSE
          !GRR (Rayleigh-Ritz Step)
-         CALL cmplx_GRayleigh_Ritz(nps,nev,Ik,veff,X,D)
+         CALL cmplx_GRayleigh_Ritz(nps,nst,Ik,veff,X,D)
       ENDIF
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE cmplx_filtering

@@ -387,7 +387,7 @@ CONTAINS
                DO Ii=1,parallel%nstate_proc
                   Ii_global=parallel%sub2sum(1,parallel%commy_myid+1)+Ii-1
                   ! PRINT*,'process', parallel%myid, 'Gamma point: Ik_global=',Ik_global,' Ii_global=',Ii_global,' wke=',wk(Ii_global,Ik,Is)
-                  PRINT*,'process', parallel%myid, 'Gamma point: Ik_global=',Ik_global,' SUM(wvfG)=',SUM(eig%wvfG(:,Ii,Is)**2)
+                  ! PRINT*,'process', parallel%myid, 'Gamma point: Ik_global=',Ik_global,' SUM(wvfG)=',SUM(eig%wvfG(:,Ii,Is)**2)
 #else
                DO Ii=1,nev
 #endif
@@ -411,9 +411,9 @@ CONTAINS
 #ifdef MPI
               DO Ii=1,parallel%nstate_proc
                  Ii_global=parallel%sub2sum(1,parallel%commy_myid+1)+Ii-1
-                 PRINT*,'process', parallel%myid, 'Non-Gamma point: Ik_global=',Ik_global,' Ii_global=',Ii_global,' SUM(wvf)=',SUM(REAL(eig%wvf(:,Ii,Ik,Is))**2+AIMAG(eig%wvf(:,Ii,Ik,Is))**2)
-                 FLUSH(6)
-                 CALL MPI_BARRIER(parallel%commy,mpinfo)
+               !   PRINT*,'process', parallel%myid, 'Non-Gamma point: Ik_global=',Ik_global,' Ii_global=',Ii_global,' SUM(wvf)=',SUM(REAL(eig%wvf(:,Ii,Ik,Is))**2+AIMAG(eig%wvf(:,Ii,Ik,Is))**2)
+               !   FLUSH(6)
+               !   CALL MPI_BARRIER(parallel%commy,mpinfo)
 #else
               DO Ii=1,nev
 #endif
@@ -437,8 +437,22 @@ CONTAINS
 
 
 #ifdef MPI
+         !debug
+         ! WRITE(filename, '(A,I2.2,A)') 'rho_local_proc', parallel%myid, '.dat'
+         ! OPEN(unit=10+parallel%myid, file=filename, status='replace', action='write', form='formatted')
+         !    WRITE(10+parallel%myid, '(10ES24.16)') rho(1:27000)
+         ! CLOSE(10+parallel%myid)
+         ! CALL MPI_BARRIER(parallel%comm,mpinfo)
+         !
+         ! PRINT*,'process', parallel%myid, 'rho_local(1:5) before MPI_ALLREDUCE=',rho(1:5)
          CALL MPI_ALLREDUCE(rho,rho_global,nr,MPI_REAL8,MPI_SUM,parallel%comm2d,ierr)
          rho=rho_global
+         !debug
+         ! IF (parallel%isroot) THEN
+         !    OPEN(unit=99, file='rho_global.dat', status='replace', action='write', form='formatted')
+         !       WRITE(99, '(ES24.16)') rho(1:27000)
+         !    CLOSE(99)
+         ! ENDIF
 #endif
          !symmetried density
         IF(Isym>=1)THEN
@@ -469,9 +483,9 @@ CONTAINS
      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 #ifdef MPI
       CALL Fermilevel(ne,nev,parallel%mygrid_range(3),kpt%wk,eig%val,Wsmear)
-      PRINT *, 'Fermi level=',fme
-      PRINT *, 'Electronic entropy=',ets
-      CALL MPI_BARRIER(parallel%comm,mpinfo)
+      ! PRINT *, 'Fermi level=',fme
+      ! PRINT *, 'Electronic entropy=',ets
+      ! CALL MPI_BARRIER(parallel%comm,mpinfo)
 #else
       CALL Fermilevel(ne,nev,nk,kpt%wk,eig%val,Wsmear)
 #endif
