@@ -1,5 +1,8 @@
 MODULE Begin_module
    USE constants
+#ifdef MPI
+   USE smpi_math_module
+#endif
    IMPLICIT NONE
 CONTAINS
 !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -29,6 +32,25 @@ CONTAINS
      CALL Build_rgrid()
      !creat k-points
      CALL Build_kgrid()
+#ifdef MPI
+      CALL smpi_init_2D()
+      !debug
+      CALL MPI_Barrier(parallel%comm, mpinfo)
+      WRITE(6, '(A,I0,A,I0,A,I0)') "[DEBUG] Process ", parallel%myid, &
+                                    ": commx_numprocs = ", parallel%commx_numprocs, &
+                                    ", commx_myid = ", parallel%commx_myid
+      WRITE(6, '(A,I0,A,I0,A,I0)') "[DEBUG] Process ", parallel%myid, &
+                                    ": commy_numprocs = ", parallel%commy_numprocs, &
+                                    ", commy_myid = ", parallel%commy_myid
+      WRITE(6, '(A,I0,A,I0,A,I0)') "[DEBUG] Process ", parallel%myid, &
+                                    ": rankx = ", parallel%rankx, ", ranky = ", parallel%ranky
+      WRITE(*, '(A,I0,A,I0,I0,I0,I0)') &
+         '[DEBUG] Process ', parallel%myid, &
+         ': comm/comm2d/commx/commy=', parallel%comm, &
+         parallel%comm2d, parallel%commx, parallel%commy
+      !PRINT*,'rank2sum=',parallel%comm2d_rank2sum
+      CALL MPI_Barrier(parallel%comm, mpinfo)
+#endif
      !creat eigen-data
      CALL Build_eigen()
      !>>>Finite difference
@@ -37,14 +59,20 @@ CONTAINS
      CALL PlanFFT(nr1,nr2,nr3)
      !recip grid mesh data
      CALL FillQTable()
-     WRITE(6,*)'R-space-GRIDS:',nr1,nr2,nr3
-     WRITE(6,*)'G-space-GRIDS:',ng1,ng2,ng3
-     WRITE(6,*)'K-space-GRIDS:',nk1,nk2,nk3
-     IF(kspacing>0.d0)THEN
-        WRITE(6,*)'Num of K-used:',nk
-     ELSE
-        WRITE(6,*)'Only gamma point is used'
-     ENDIF
+#ifdef MPI
+   IF (parallel%isroot) THEN
+#endif
+      WRITE(6,*)'R-space-GRIDS:',nr1,nr2,nr3
+      WRITE(6,*)'G-space-GRIDS:',ng1,ng2,ng3
+      WRITE(6,*)'K-space-GRIDS:',nk1,nk2,nk3
+      IF(kspacing>0.d0)THEN
+         WRITE(6,*)'Num of K-used:',nk
+      ELSE
+         WRITE(6,*)'Only gamma point is used'
+      ENDIF
+#ifdef MPI
+   ENDIF
+#endif
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   ENDSUBROUTINE Initial_Grid
   !------------------inichrg---------------------------
@@ -62,7 +90,13 @@ CONTAINS
          CALL GetStructOp(naty,struct%nati,natom,TRANSPOSE(lat_mat), &
       &       struct%posdir, opoint_tol, trans_tol, &
       &       Opsym ,Otrans, num_t, c_i, nsym)
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
        WRITE(*,*) 'Find point operator number:',nsym
+#ifdef MPI
+      ENDIF
+#endif
      ELSE
        Otrans(:,:)=0._DP
        Opsym(:,:,:)=0._DP

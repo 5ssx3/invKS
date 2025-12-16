@@ -1,5 +1,8 @@
 MODULE opt_module
   USE constants
+#ifdef MPI
+  USE smpi_math_module
+#endif
   IMPLICIT NONE
   REAL(DP),ALLOCATABLE :: D(:),GOLD(:),W(:)
   !For LBFGS-B
@@ -151,6 +154,7 @@ CONTAINS
      fd=509612.d0
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   ENDSUBROUTINE initFIRE
+  !
     SUBROUTINE FIRE_optm(n,X,f,G)
      IMPLICIT NONE
      !INOUT
@@ -209,12 +213,18 @@ CONTAINS
      !Fix center?
      X(:)=X(:)-SUM(X)/n
      !-----------------------------------------------
+#ifdef MPI
+     IF (parallel%isroot) THEN
+#endif
      PRINT*,'***********FIRE OPTIMIATION************'
      WRITE(*,*) 'root-mean-squre(g)',SQRT(Normg/n)
      PRINT*,'nWs changed',f-fd
      PRINT*,'present time step',TIM
      PRINT*,'present power','(',Power,')'
      PRINT*,'***************************************'
+#ifdef MPI
+     ENDIF
+#endif
      fd=f
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   ENDSUBROUTINE FIRE_optm

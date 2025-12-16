@@ -2,7 +2,10 @@ MODULE invKS_module
   USE constants
   USE parameters , ONLY : wtol=>etol,gtol=>Rtol &
              & ,iopt,nskip
-  USE struct_module, ONLY : lat=>lat_mat
+  USE struct_module, ONLY : lat=>lat_mat 
+#ifdef MPI
+  USE smpi_math_module
+#endif
   IMPLICIT NONE
   CONTAINS
 !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -12,13 +15,16 @@ MODULE invKS_module
   !-------------------optim_potential-----------------
   SUBROUTINE iks_optim_WY()
      USE parameters , ONLY : nev,nssp,Idiag, Chetol,nspin,sigma=>Wsmear
-     USE grid_module , ONLY : nr1,nr2,nr3,nr,nk,kpt,nrs,eigen,grid
+     USE grid_module , ONLY : nr1,nr2,nr3,nr,nk,kpt,nrs,eigen,grid,eigen_type, destroy_eigen
      !USE scf_module , ONLY : smear_updaterho,kfilter,ksolver
      USE smearing_module , ONLY : smear_init,Fermilevel,smear_updaterho &
                & ,wke,fme,ets
      USE struct_module , ONLY : ne_r,dvol,volume
-     USE chebyshev_module, ONLY : BuildSubspace,CheF_all
+      USE chebyshev_module, ONLY : BuildSubspace,CheF_all
      USE opt_module
+#ifdef MPI
+       USE smpi_math_module
+#endif
      IMPLICIT NONE
      !IN/OUT
      !LOCAL
@@ -29,7 +35,9 @@ MODULE invKS_module
      !xqtest 
      INTEGER(I4B) :: Is
      REAL(DP) :: ngvec(nr)
+     TYPE(eigen_type) :: eig
      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+     !max iterations for WY functional
      SELECT CASE(Iopt)
      CASE(1)
         CALL initCG(nr)
@@ -41,17 +49,31 @@ MODULE invKS_module
      !init
      CALL smear_init(nev)
      !first eigepairs
-     DO is=1,nspin
-        grid%veff(:,is)=grid%vef0(:)
-     ENDDO
-     CALL BuildSubspace(nr,nev,grid%veff,eigen)
-     CALL smear_updaterho(nr,nev,ne_r,eigen,grid%rhoS,grid%rho)
-     PRINT*,'Total electrons testing:',SUM(grid%rho)*dvol
+      DO is=1,nspin
+         grid%veff(:,is)=grid%vef0(:)
+      ENDDO
+
+      CALL BuildSubspace(nr,nev,grid%veff,eigen)
+
+      CALL smear_updaterho(nr,nev,ne_r,eigen,grid%rhoS,grid%rho)
+
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
+      PRINT*,'Total electrons testing:',SUM(grid%rho)*dvol
+#ifdef MPI
+   ENDIF
+#endif
+      !
+      PRINT*,'process:',parallel%myid,'stop before maxWY loop'
+      CALL MPI_BARRIER(parallel%comm,mpinfo)
+      STOP
+      !
      !PRINT*,eigen%val(:,1,1)
      maxWY : DO Iter=1,nssp
         !WY functional
         CALL iks_Ws(nr,grid%rho,grid%rho0,grid%veff(:,1) &
-           & ,eigen%val,wke,ets,nwsp,penfun,ngvec) 
+           & ,eigen%val,wke,ets,nwsp,penfun,ngvec)
         !opt
         SELECT CASE(Iopt)
         CASE(1)
@@ -124,8 +146,15 @@ MODULE invKS_module
               Chetol=Chetol*0.9d0
            ENDIF
         CASE default
+#ifdef MPI
+         CALL MPI_BARRIER(parallel%comm,mpinfo)
+         IF (parallel%isroot) THEN
+#endif
            WRITE(*,*)'================== PERFORM FIRE =================='
-           CALL FIRE_optm(nr,grid%veff(:,1),nwsp,ngvec)
+#ifdef MPI
+         ENDIF
+#endif
+            CALL FIRE_optm(nr,grid%veff(:,1),nwsp,ngvec)
            myicount=myicount+1
            histW(1)=histW(2)
            histW(2)=histW(3)
@@ -136,6 +165,9 @@ MODULE invKS_module
                &  abs(histW(3)-histW(2))<wtol .AND. &
                &  abs(histW(2)-histW(1))<wtol       &
                &   )THEN
+#ifdef MPI
+         IF (parallel%isroot) THEN
+#endif
                   PRINT*,'Ws has reach the accury:',wtol*hart2ev,' eV'
                   OPEN(1111,FILE='Veff.dat')
                       WRITE(1111,*) 'Ne',ne_r
@@ -147,6 +179,9 @@ MODULE invKS_module
                       WRITE(200,*) nr1,nr2,nr3
                       WRITE(200,*) grid%rho(:)*volume
                   CLOSE(200)
+#ifdef MPI
+         ENDIF
+#endif            
                   IF(gNorm<gtol)  EXIT maxWY
                ENDIF
            ENDIF
@@ -155,36 +190,69 @@ MODULE invKS_module
         !gnorm
         gNorm=SUM(ABS(ngvec))/nr
         drho=SUM(ABS(grid%rho-grid%rho0))/nr
-        PRINT*,Iter,'Ws(eV)=',-nwsp*hart2ev,'penalty(eV)=',penfun*hart2ev
-        PRINT*,'AverNorm/min/max(density difference) in a.u.'
-        PRINT*,drho,MINVAL(grid%rho-grid%rho0),MAXVAL(grid%rho-grid%rho0)
-        PRINT*,'AverNorm/min/max(nGvec) in a.u.'
-        PRINT*,gnorm,MINVAL(ngvec),MAXVAL(ngvec)
-        PRINT*,'Total rho difference should be 0:',SUM(grid%rho-grid%rho0)*dvol
-
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
+         PRINT*,Iter,'Ws(eV)=',-nwsp*hart2ev,'penalty(eV)=',penfun*hart2ev
+         PRINT*,'AverNorm/min/max(density difference) in a.u.'
+         PRINT*,drho,MINVAL(grid%rho-grid%rho0),MAXVAL(grid%rho-grid%rho0)
+         PRINT*,'AverNorm/min/max(nGvec) in a.u.'
+         PRINT*,gnorm,MINVAL(ngvec),MAXVAL(ngvec)
+         PRINT*,'Total rho difference should be 0:',SUM(grid%rho-grid%rho0)*dvol
+#ifdef MPI
+      ENDIF
+      CALL MPI_BARRIER(parallel%comm,mpinfo)
+#endif
         !Getting next eiegnpairs by CheFSI
         DO Ifilter=1,10
            fmed=fme
-           CALL CheF_all(nr,nev,grid%veff,eigen)
-           !Find Fermi Level
-           CALL Fermilevel(ne_r,nev,nk,kpt%wk,eigen%val,sigma)
+            CALL CheF_all(nr,nev,grid%veff,eigen)
+            !Find Fermi Level
+#ifdef MPI
+            CALL Fermilevel(ne_r,parallel%nstate_proc,parallel%mygrid_range(3),kpt%wk,eigen%val,sigma)
+#else
+            CALL Fermilevel(ne_r,nev,nk,kpt%wk,eigen%val,sigma)
+#endif           
            IF(ABS(fme-fmed)<Chetol) EXIT
         ENDDO
         !filter acucury
+#ifdef MPI
+   IF (parallel%isroot) THEN
+#endif
         PRINT*,MIN(Ifilter,10),'Chebyshev Accury:',ABS(fme-fmed)*hart2ev,'eV'
-        CALL smear_updaterho(nr,nev,ne_r,eigen,grid%rhoS,grid%rho)
+#ifdef MPI
+   ENDIF
+#endif
+#ifdef MPI
+      CALL smear_updaterho(nr,parallel%nstate_proc,ne_r,eigen,grid%rhoS,grid%rho)
+#else
+      CALL smear_updaterho(nr,nev,ne_r,eigen,grid%rhoS,grid%rho)
+#endif
+
      ENDDO maxWY
-     PRINT*,'Ws has reach the accury:',wtol*hart2ev,' eV'
-     OPEN(1111,FILE='Veff.dat')
-         WRITE(1111,*) 'Ne',ne_r
-         WRITE(1111,*) nr1,nr2,nr3
-         WRITE(1111,*) grid%veff(:,:)*hart2eV
-     CLOSE(1111)
-     !difference
-     OPEN(200,FILE='RhoF.dat')
-         WRITE(200,*) nr1,nr2,nr3
-         WRITE(200,*) grid%rho(:)*volume
-     CLOSE(200)
+     !
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
+         PRINT*,'Ws has reach the accury:',wtol*hart2ev,' eV'
+         OPEN(1111,FILE='Veff.dat')
+            WRITE(1111,*) 'Ne',ne_r
+            WRITE(1111,*) nr1,nr2,nr3
+            WRITE(1111,*) grid%veff(:,:)*hart2eV
+         CLOSE(1111)
+         !difference
+         OPEN(200,FILE='RhoF.dat')
+            WRITE(200,*) nr1,nr2,nr3
+            WRITE(200,*) grid%rho(:)*volume
+         CLOSE(200)
+#ifdef MPI
+   ENDIF
+   CALL MPI_Barrier(parallel%comm, mpinfo)
+   IF (ALLOCATED(parallel%recvcounts)) DEALLOCATE(parallel%recvcounts)
+   IF (ALLOCATED(parallel%displs)) DEALLOCATE(parallel%displs)
+   IF (ALLOCATED(parallel%global_gridrange)) DEALLOCATE(parallel%global_gridrange)
+   CALL destroy_eigen()
+#endif
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   ENDSUBROUTINE iks_optim_WY
 !-------------------------PARTING LINE-------------------------
@@ -206,17 +274,28 @@ MODULE invKS_module
      !LOCAL
      REAL(DP) :: dvs(3,nps),d2vs(nps) &!penalty function
              &, Ws
+#ifdef MPI
+     REAL(DP) :: Ws_local
+#endif
      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
      !Penalty function Lambda*SUM(|\nabla V|^2)*dvol
-     CALL real_pbc_nabla1(vs,dvs)
-     CALL real_pbc_nabla2(vs,d2vs)
-     penfun= penLambda*SUM(dvs(:,:)*dvs(:,:))*dvol
-     !Ws=Es-TS+SUM( Vs(rho-rho0) ) *dvol= Eband-TS-SUM(vs*rho0)*dvol
-     Ws=SUM(wks*evals) - etpy - SUM(vs*rho0)*dvol
-     !L=-Ws + PF
-     nwsp= -Ws + penfun
-     !gradient of WY functional with penalty function
-     ngvec(:)=  rho0(:) - rho(:)  - 2.d0*penLambda*d2vs(:)
+      CALL real_pbc_nabla1(vs,dvs)
+      CALL real_pbc_nabla2(vs,d2vs)
+      penfun= penLambda*SUM(dvs(:,:)*dvs(:,:))*dvol
+      !Ws=Es-TS+SUM( Vs(rho-rho0) ) *dvol= Eband-TS-SUM(vs*rho0)*dvol
+#ifdef MPI
+      Ws_local=SUM(wks*evals)
+      CALL MPI_ALLREDUCE(Ws_local,Ws,1,MPI_REAL8,MPI_SUM,parallel%comm,mpinfo)
+      Ws=Ws - etpy - SUM(vs*rho0)*dvol
+#else
+      Ws=SUM(wks*evals) - etpy - SUM(vs*rho0)*dvol
+#endif
+      !L=-Ws + PF
+      nwsp= -Ws + penfun
+      !gradient of WY functional with penalty function
+      ngvec(:)=  rho0(:) - rho(:)  - 2.d0*penLambda*d2vs(:)
+
+
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   ENDSUBROUTINE iks_Ws
 

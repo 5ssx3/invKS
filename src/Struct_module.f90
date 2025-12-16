@@ -114,11 +114,20 @@ CONTAINS
   SUBROUTINE read_data()
      USE parameters, ONLY : nskip,nspin,nev,nadds
      USE struct_module, ONLY : volume,dvol,ne_i,ne_r
+#ifdef MPI
+      USE smpi_math_module, ONLY:parallel
+#endif
      IMPLICIT NONE
      INTEGER(I4B)  :: fs1=0,fs2=0
      INTEGER(I4B) :: ip,nx,ny,nz
      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
      PRINT*,'Reading CHGCAR and LOCPOT files ...'
+#ifdef MPI
+      ENDIF
+#endif
      OPEN(110,FILE='CHGCAR',IOSTAT=fs1)
           IF(fs1/=0)THEN
              WRITE(*,*) 'STOP: Could not open',fs1
@@ -129,7 +138,13 @@ CONTAINS
              WRITE(*,*) 'STOP: Could not open',fs2
              STOP
           ENDIF
+#ifdef MPI
+   IF (parallel%isroot) THEN
+#endif
         PRINT*,'nskip', nskip
+#ifdef MPI
+   ENDIF
+#endif
         DO ip =1,nskip
            READ(110,*)
            READ(111,*)
@@ -139,7 +154,13 @@ CONTAINS
         IF(nr1/=nx .OR. nr2/=ny .OR. nr3/=nz)THEN
              STOP "Check the grids in CHGCAR and LOCPOT"
         ENDIF
+#ifdef MPI
+   IF (parallel%isroot) THEN
+#endif
         PRINT*,'Grids(nx,ny,nz):',nr1,nr2,nr3
+#ifdef MPI
+   ENDIF
+#endif
         nr=nr1*nr2*nr3
         nrs=nr*nspin
         ALLOCATE(grid%rho0(nr),grid%vef0(nr))
@@ -155,9 +176,21 @@ CONTAINS
      ne_r=SUM(grid%rho0)*dvol
      ne_i=ANINT(ne_r)
      ne_r=REAL(ne_i,DP)
-     PRINT*,'Total # of electrons are:', ne_r
+#ifdef MPI
+   IF (parallel%isroot) THEN
+#endif
+      PRINT*,'Total # of electrons are:', ne_r
+#ifdef MPI
+   ENDIF
+#endif
      nev=ne_i/2+MAX(2,nadds)
-     PRINT*,'# of states would be calculated', nev
+#ifdef MPI
+   IF (parallel%isroot) THEN
+#endif
+      PRINT*,'# of states would be calculated', nev
+#ifdef MPI
+   ENDIF
+#endif
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   ENDSUBROUTINE read_data
   !-------------------PARTING LINE--------------------
@@ -206,6 +239,9 @@ CONTAINS
   SUBROUTINE Build_kgrid()
      USE parameters , ONLY : kspacing,kgrid,IGamma
      USE struct_module , ONLY : recip_lat,lat_para
+#ifdef MPI
+      USE smpi_math_module, ONLY : parallel
+#endif
      IMPLICIT NONE
      LOGICAL  :: lkmesh
      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -232,7 +268,13 @@ CONTAINS
         kpt%vdir(:,:)=0.d0
         kpt%vcar(:,:)=0.d0
      ENDIF
+#ifdef MPI
+   IF (parallel%isroot) THEN
+#endif
      PRINT*,'k-point meshes:',nk1,nk2,nk3
+#ifdef MPI
+   ENDIF
+#endif
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   ENDSUBROUTINE Build_kgrid
   !-------------------PARTING LINE--------------------
@@ -247,22 +289,89 @@ CONTAINS
   ENDSUBROUTINE destroy_kpt
   !-------------------PARTING LINE--------------------
   SUBROUTINE Build_eigen()
-     USE parameters , ONLY : nspin,nev,IGamma
+      USE parameters , ONLY : nspin,nev,IGamma
+#ifdef MPI
+      USE smpi_math_module, ONLY : grid_split, array_split, parallel
+#endif
      IMPLICIT NONE
+#ifdef MPI
+      INTEGER(I4B) :: Ik, Ik_global, mpinfo
+      LOGICAL :: has_gamma
+#endif
      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-     !PRINT*,'Building eigen data structural ...'
+#ifdef MPI
+   IF (.NOT. ALLOCATED(parallel%recvcounts)) ALLOCATE(parallel%recvcounts(parallel%commx_numprocs))
+   IF (.NOT. ALLOCATED(parallel%displs)) ALLOCATE(parallel%displs(parallel%commx_numprocs))
+   IF (.NOT. ALLOCATED(parallel%global_gridrange)) ALLOCATE(parallel%global_gridrange(3,parallel%commx_numprocs))
+   CALL grid_split(nk,parallel%commx_numprocs,parallel%commx,parallel%commx_myid,parallel%mygrid_range,parallel%recvcounts,parallel%displs,parallel%global_gridrange)
+      ! Print the grid_split results (for each process)
+      CALL MPI_Barrier(parallel%comm, mpinfo)
+      WRITE(6, '(A,I0,A,3I0)') "[DEBUG] Process ", parallel%myid, &
+                              ": mygrid_range (start,end,num) = ", parallel%mygrid_range
+      IF (ALLOCATED(parallel%recvcounts)) THEN
+         WRITE(6, '(A,I0,A,100I0)') "[DEBUG] Process ", parallel%myid, &
+                                    ": recvcounts = ", parallel%recvcounts(1:MIN(10, SIZE(parallel%recvcounts)))
+      ELSE
+         WRITE(6, '(A,I0)') "[DEBUG] Process ", parallel%myid, ": recvcounts not allocated!"
+      ENDIF
+      CALL MPI_Barrier(parallel%comm, mpinfo)
+      
+   CALL array_split(nev, parallel%commy_numprocs, parallel%commy, parallel%commy_myid, parallel%nstate_proc, parallel%sub2sum)
+      ! Print the results of array_split (for each process)
+      CALL MPI_Barrier(parallel%comm, mpinfo)
+      WRITE(6, '(A,I0,A,I0)') "[DEBUG] Process ", parallel%myid, &
+                              ": nstate_proc = ", parallel%nstate_proc
+      IF (ALLOCATED(parallel%sub2sum)) THEN
+         WRITE(6, '(A,I0,A,100I0)') "[DEBUG] Process ", parallel%myid, &
+                                    ": sub2sum(1:nstate_proc) = ", parallel%sub2sum(1:parallel%nstate_proc,parallel%commy_myid+1)
+      ELSE
+         WRITE(6, '(A,I0)') "[DEBUG] Process ", parallel%myid, ": sub2sum not allocated!"
+      ENDIF
+      CALL MPI_Barrier(parallel%comm, mpinfo)
+#endif
      CALL destroy_eigen()
      IF(IGamma<=0)THEN
-        ALLOCATE(eigen%wvf(nr,nev,nk,Nspin))
+#ifdef MPI
+         ALLOCATE(eigen%wvf(nr,parallel%nstate_proc,parallel%mygrid_range(3),Nspin))
+#else
+         ALLOCATE(eigen%wvf(nr,nev,nk,Nspin))
+#endif
      ELSE !have gamma point
-        IF(nk>=2)THEN
-           ALLOCATE(eigen%wvf(nr,nev,nk-1,Nspin))
-        ENDIF
+         IF(nk>=2)THEN
+
+#ifdef MPI
+         ALLOCATE(eigen%wvf(nr,parallel%nstate_proc,parallel%mygrid_range(3),Nspin))
+#else
+         ALLOCATE(eigen%wvf(nr,nev,nk-1,Nspin))
+#endif
+         ENDIF
         !
-        ALLOCATE(eigen%wvfG(nr,nev,Nspin))
+#ifdef MPI
+        has_gamma = .FALSE.
+        DO Ik = 1, parallel%mygrid_range(3)
+            Ik_global = parallel%displs(parallel%commx_myid+1) + Ik
+            IF (Ik_global == IGamma) THEN
+                has_gamma = .TRUE.
+                EXIT
+            ENDIF
+        ENDDO
+         IF (has_gamma) THEN
+            ALLOCATE(eigen%wvfG(nr, parallel%nstate_proc, Nspin))
+            WRITE(6, '(A,I0,A,I0)') "[INFO] Process ", parallel%myid, " allocates wvfG for gamma point k=", IGamma
+         ENDIF
+#else
+         ALLOCATE(eigen%wvf(nr,nev,nk-1,Nspin))
+         ALLOCATE(eigen%wvfG(nr,parallel%nstate_proc,Nspin))
+#endif
      ENDIF
      !eigen value
-     ALLOCATE(eigen%val(nev,nk,nspin))
+#ifdef MPI
+      ALLOCATE(eigen%val(nev,parallel%mygrid_range(3),nspin))
+      DEALLOCATE(parallel%recvcounts)
+      DEALLOCATE(parallel%displs)
+#else
+      ALLOCATE(eigen%val(nev,nk,nspin))
+#endif
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   ENDSUBROUTINE Build_eigen
   !-------------------PARTING LINE--------------------

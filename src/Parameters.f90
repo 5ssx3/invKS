@@ -13,7 +13,7 @@ MODULE parameters
                 &   CheM0=16,  &       !the free diag 
                 &   gridn(3)=-1 ,  &  !grid mesh
                 &   kgrid(3)=-1 ,  &  !k-grid mesh
-                &   nssp=0           !number of simulation steps
+                &   nssp=0          !number of simulation steps
    INTEGER(I4B)  :: IGamma=-1
    !        
    REAL(DP)      :: kspacing=0.5   !input k-spacing 

@@ -5,7 +5,13 @@ MODULE read_module
    !* Date   : 2017/07/04                                        !
    !#############################################################!
    USE constants
+#ifdef MPI
+   USE smpi_math_module
+#endif
    IMPLICIT NONE
+#ifdef MPI
+   INTEGER(I4B) :: ierr
+#endif
 CONTAINS
    !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
    !------------------------read input.dat------------------------
@@ -33,8 +39,15 @@ CONTAINS
       INQUIRE(FILE=infile,EXIST=lexist)
       !test the input.dat
       IF(.NOT.lexist)THEN
+#ifdef MPI
+         IF (parallel%isroot) THEN
+            WRITE(*,*) '>>>WARNING<<<:input file is not exist.stop!!!'
+            CALL MPI_ABORT(parallel%comm,mpinfo,ierr)
+         ENDIF
+#else
          WRITE(*,*) '>>>WARNING<<<:input file is not exist.stop!!!'
          STOP
+#endif
       ENDIF
       !
       OPEN(100,FILE=infile,STATUS='old')
@@ -66,7 +79,13 @@ CONTAINS
          IF(str(1:id_key) =='system')THEN
             str=instr
             READ(str(id_value:l_str),*) system_name
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
             WRITE(*,*) 'Task name >>> ',system_name
+#ifdef MPI
+      ENDIF
+#endif
          ENDIF
          !k-grids
          IF(str(1:id_key)=='kspacing')THEN
@@ -94,7 +113,13 @@ CONTAINS
                WRITE(*,*) "STOP!!:the order of finite difference should in [2-20]"
                STOP
             ENDIF
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
             WRITE(*,*) "The order of finite difference is:",nfd*2
+#ifdef MPI
+      ENDIF
+#endif
          ENDIF
          !diag(H)
          IF(str(1:id_key)=='nadds')THEN
@@ -104,10 +129,22 @@ CONTAINS
          IF(str(1:id_key)=='lspin')THEN
             IF(str(id_value:id_value)=='t')THEN
                 nspin=2
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
                 WRITE(*,*) "Spin polarized"
+#ifdef MPI
+      ENDIF
+#endif
             ELSE
                 nspin=1
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
                 WRITE(*,*) "Spin unpolarized"
+#ifdef MPI
+      ENDIF
+#endif
             ENDIF
          ENDIF
          !---
@@ -125,14 +162,26 @@ CONTAINS
          IF(str(1:id_key) == 'chem')THEN
             READ(str(id_value:l_str),*) CheM
             IF(Idiag/=0)THEN
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
                 WRITE(*,*) "Chebyshev filter is used,order:",CheM
+#ifdef MPI
+      ENDIF
+#endif
             ENDIF
          ENDIF
          !CheM0
          IF(str(1:id_key) == 'chem0')THEN
             READ(str(id_value:l_str),*) CheM0
             IF(Idiag/=0)THEN
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
                 WRITE(*,*) "first Chebyshev filter order:",CheM0
+#ifdef MPI
+      ENDIF
+#endif
             ENDIF
          ENDIF
          !rtol
@@ -148,7 +197,13 @@ CONTAINS
          IF( str(1:id_key) == 'nssp' )THEN
             READ(str(id_value:l_str),*) nssp
             nssp=MAX(nssp,0)
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
             WRITE(*,*) 'Max simulate steps is:',nssp
+#ifdef MPI
+      ENDIF
+#endif
          ENDIF
          !=====================optimization=====================
          IF( str(1:id_key) == 'iopt' )THEN
@@ -206,10 +261,17 @@ CONTAINS
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       OPEN(101,FILE='CHGCAR',IOSTAT=filestatu)
 
-          IF(filestatu/=0)THEN
-             WRITE(*,*) 'STOP:Could not open CHGCAR file'
-             STOP
-          ENDIF
+         IF(filestatu/=0)THEN
+#ifdef MPI
+      IF (parallel%isroot) THEN
+            WRITE(*,*) 'STOP:Could not open CHGCAR file'
+            CALL MPI_ABORT(parallel%comm,mpinfo,ierr)
+      ENDIF
+#else
+            WRITE(*,*) 'STOP:Could not open CHGCAR file'
+            STOP
+#endif
+         ENDIF
 
           READ(101,*)          !title,no use
           READ(101,*) lat_ratio
@@ -259,7 +321,13 @@ CONTAINS
              struct%poscar=struct%poscar*ang2bohr
              CALL car2dir(struct%poscar,struct%posdir,lat_mat)
           ENDIF
+#ifdef MPI
+      IF (parallel%isroot) THEN
+#endif
           PRINT*,'Skip lines in CHGCAR and LOCPOT',nskip
+#ifdef MPI
+      ENDIF
+#endif
       CLOSE(101)
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE read_pos

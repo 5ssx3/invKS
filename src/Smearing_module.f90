@@ -8,6 +8,10 @@ MODULE smearing_module
   !###########################################################!
   USE constants
   USE parameters , ONLY : Nsmear,Wsmear
+#ifdef MPI
+   USE mpi
+   USE smpi_math_module
+#endif
   IMPLICIT NONE
   REAL(DP),ALLOCATABLE :: wke(:,:,:)
   REAL(DP) :: fme & !Fermi level
@@ -23,7 +27,11 @@ CONTAINS
      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
      CALL destroy_smear()
      IF(.NOT.ALLOCATED(wke))THEN
+#ifdef MPI
+      ALLOCATE(wke(nev,parallel%mygrid_range(3),NSPIN))
+#else
         ALLOCATE(wke(nev,nk,nspin))
+#endif
      ENDIF
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   ENDSUBROUTINE smear_init
@@ -128,6 +136,9 @@ CONTAINS
     !########################################!
     !Find Fermi level and k-point weight
     USE parameters , ONLY : NSPIN
+#ifdef MPI
+   USE mpi
+#endif
     IMPLICIT NONE  
     !INPUT
     REAL(DP),INTENT(IN) :: ne
@@ -137,16 +148,22 @@ CONTAINS
     REAL(DP),INTENT(IN) :: wk(:) & !wk0
                         &,sigma !width of smearing
     !OUTPUT
-    ! 
     REAL(DP) :: emin,emax
     REAL(DP) :: sumq,E_mu,fi
-    INTEGER(I4B) :: Ik,Ispin,Ioc,iter
+    INTEGER(I4B) :: Ik,Ispin,Ioc,iter,f
     INTEGER(I4B) :: NITER=150 !total iter step
     REAL(DP) :: T,drange,totq,sn
     REAL(DP) :: TOL=1e-10
+#ifdef MPI
+   REAL(DP) :: sumq_global
+   REAL(DP) :: ets_global
+   REAL(DP) :: emin_global, emax_global
+   INTEGER(I4B) :: ierr, Ik_global
+#endif
     !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     wke(:,:,:)=0.d0
     totq=ne
+    f=0
     !
     emin=MINVAL(eval(:,1,:))
     emax=MAXVAL(eval(:,1,:))
@@ -155,21 +172,43 @@ CONTAINS
        DO Ik=1,nk
           DO Ioc=1,nev
              !4.d0 for time reverse symmtery
+#ifdef MPI
+             Ik_global=Ik+parallel%global_gridrange(1,parallel%commx_myid+1)-1
+             wke(Ioc,Ik,Ispin)=wk(Ik_global)*2.d0/NSPIN
+#else  
              wke(Ioc,Ik,Ispin)=wk(Ik)*2.d0/NSPIN
+#endif
              sumq=sumq+wke(Ioc,Ik,Ispin)
              emin=MIN(emin,eval(Ioc,Ik,Ispin))
              emax=MAX(emax,eval(Ioc,Ik,Ispin))
           ENDDO
        ENDDO
     ENDDO
+#ifdef MPI
+   CALL MPI_ALLREDUCE(emin, emin_global, 1, MPI_REAL8, MPI_MIN, parallel%commx, ierr)
+   CALL MPI_ALLREDUCE(emax, emax_global, 1, MPI_REAL8, MPI_MAX, parallel%commx, ierr)
+   emin = emin_global
+   emax = emax_global
+   CALL MPI_ALLREDUCE(sumq, sumq_global, 1, MPI_REAL8,MPI_SUM, parallel%commx, ierr)
+   sumq=sumq_global
+#endif
     !
     fme=emax
     IF(ABS(sumq-totq)<TOL) RETURN
     !
-    IF(sumq<totq)THEN
+    IF(sumq<totq .AND. f==0)THEN
+      f=1
+#ifdef MPI
+       IF(parallel%isroot) THEN
+#endif
        WRITE(*,*) 'Fermilevel:The states not enough'
        WRITE(*,*) 'totq,sumq=',totq,sumq
+#ifdef MPI
+      ENDIF
+      CALL MPI_ABORT(parallel%comm,1,ierr)
+#else
        STOP
+#endif
     ENDIF
     !
     T =MAX(sigma,1.d-6)
@@ -181,14 +220,26 @@ CONTAINS
         sumq = 0.0d0
         DO Ispin=1,NSPIN
            DO Ik = 1,nk
-              DO Ioc=1,nev
-                 CALL smearSN(eval(Ioc,Ik,Ispin),fme,T,sn)
-                 !4.d0 for time inverse symmtery
+#ifdef MPI
+               Ik_global=Ik+parallel%global_gridrange(1,parallel%commx_myid+1)-1
+#endif
+               DO Ioc=1,nev
+                  CALL smearSN(eval(Ioc,Ik,Ispin),fme,T,sn)
+                  !4.d0 for time inverse symmtery
+
+#ifdef MPI
+                 wke(Ioc,Ik,Ispin) = wk(Ik_global)*sn*2.d0/NSPIN
+#else 
                  wke(Ioc,Ik,Ispin) = wk(Ik)*sn*2.d0/NSPIN
+#endif
                  sumq = sumq + wke(Ioc,Ik,Ispin)
               ENDDO
            ENDDO
         ENDDO
+#ifdef MPI
+         CALL MPI_ALLREDUCE(sumq,sumq_global,1,MPI_REAL8,MPI_SUM,parallel%commx,ierr)
+         sumq=sumq_global
+#endif
         !find the fermi level ?
         IF(ABS(sumq-totq)<TOL) EXIT
         !next
@@ -197,11 +248,15 @@ CONTAINS
 
     ENDDO
     
-    IF (iter>=150) THEN
-       WRITE(*,*) 'Fermileval : search fermi level failed'
-       WRITE(*,*) 'totq,sumq=',totq,sumq
+   IF (iter>=150) THEN
+      WRITE(*,*) 'Fermileval : search fermi level failed'
+      WRITE(*,*) 'totq,sumq=',totq,sumq
+#ifdef MPI
+      CALL MPI_ABORT(parallel%comm,1,ierr)
+#else
        STOP
-    ENDIF
+#endif
+   ENDIF
 !print*,'sumq',sumq
 !print*,'wke'
 !print*,wke
@@ -214,14 +269,23 @@ CONTAINS
        DO Ik = 1, nk
           DO Ioc = 1,nev
 
+#ifdef MPI
+              Ik_global=Ik+parallel%global_gridrange(1,parallel%commx_myid+1)-1
+              fi = (NSPIN/2.d0)*wke(Ioc,Ik,Ispin) / wk(Ik_global)
+              E_mu = (eval(Ioc,Ik,Ispin)-fme) / T
+              ets = ets + ( 2.d0 * wk(Ik_global)/NSPIN ) * enpy(E_mu,fi)
+#else
               fi = (NSPIN/2.d0)*wke(Ioc,Ik,Ispin) / wk(Ik)
               E_mu = (eval(Ioc,Ik,Ispin)-fme) / T
-
               ets = ets + ( 2.d0 * wk(Ik)/NSPIN ) * enpy(E_mu,fi)
-
+#endif
           ENDDO
        ENDDO
     ENDDO
+#ifdef MPI
+         CALL MPI_ALLREDUCE(ets,ets_global,1,MPI_REAL8,MPI_SUM,parallel%commx,ierr)
+         ets=ets_global
+#endif
     !E=TS
     ets=T*ets
     !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -289,7 +353,7 @@ CONTAINS
   !------------------updaterho---------------------
   SUBROUTINE Updaterho_PBC(nps,nev,eig,wk,rhoS,rho)
      USE parameters , ONLY : nspin,Isym,IGamma
-     USE grid_module , ONLY : nk,nr &
+     USE grid_module , ONLY : nr &
                     &, eigen_type,sumrhoS
      USE Grid_symmetry, ONLY : Symm_density_r
      USE struct_module, ONLY : dvol
@@ -297,38 +361,71 @@ CONTAINS
      !INOUT
      INTEGER(I4B),INTENT(IN) :: nps,nev !num. of points and states
      TYPE(eigen_type),INTENT(IN) :: eig
-     REAL(DP),INTENT(IN) :: wk(nev,nk,nspin)
+     REAL(DP),INTENT(IN) :: wk(:,:,:) !wke
      REAL(DP),INTENT(OUT) :: rhoS(nr,nspin),rho(nr)
      !LOCAL
      INTEGER(I4B) :: lft,rit,Is,Ik,Ii,ip,ix,iy,iz,Ii1
+#ifdef MPI
+       INTEGER(I4B) :: ierr, Ik_global, Ii_global
+       REAL(DP) :: rho_global(nps)
+       !debug
+       character(len=50) :: filename
+#endif
      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
      DO Is=1,Nspin
         rho(:)=0.d0
         !gamma point
-        DO Ik=1,nk
-
-           IF(Ik==IGamma)THEN
+        DO Ik=1,parallel%mygrid_range(3)
+#ifdef MPI
+            Ik_global=parallel%global_gridrange(1,parallel%commx_myid+1)+Ik-1
+            IF(Ik_global == IGamma)THEN
+#else
+            IF(Ik == IGamma)THEN
+#endif
               !Gamma point
-              DO Ii=1,nev
-
+#ifdef MPI
+               DO Ii=1,parallel%nstate_proc
+                  Ii_global=parallel%sub2sum(1,parallel%commy_myid+1)+Ii-1
+                  ! PRINT*,'process', parallel%myid, 'Gamma point: Ik_global=',Ik_global,' Ii_global=',Ii_global,' wke=',wk(Ii_global,Ik,Is)
+                  PRINT*,'process', parallel%myid, 'Gamma point: Ik_global=',Ik_global,' SUM(wvfG)=',SUM(eig%wvfG(:,Ii,Is)**2)
+#else
+               DO Ii=1,nev
+#endif
+#ifdef MPI
+                 IF(wk(Ii_global,Ik,Is)<xtiny) CYCLE
+#else
                  IF(wk(Ii,Ik,Is)<xtiny) CYCLE
+#endif
                  !calculation
-                 DO Ip=1,nps
-
-                    rho(Ip)=rho(Ip)+wk(Ii,Ik,Is)*eig%wvfG(Ip,Ii,Is)**2
-
-                 ENDDO
-              ENDDO
+                  DO Ip=1,nps
+#ifdef MPI
+                     rho(Ip)=rho(Ip)+wk(Ii_global,Ik,Is)*eig%wvfG(Ip,Ii,Is)**2
+#else
+                     rho(Ip)=rho(Ip)+wk(Ii,Ik,Is)*eig%wvfG(Ip,Ii,Is)**2
+#endif 
+                  ENDDO
+               ENDDO
 
            ELSE
               !Non-Gamma-k
+#ifdef MPI
+              DO Ii=1,parallel%nstate_proc
+                 Ii_global=parallel%sub2sum(1,parallel%commy_myid+1)+Ii-1
+                 PRINT*,'process', parallel%myid, 'Non-Gamma point: Ik_global=',Ik_global,' Ii_global=',Ii_global,' SUM(wvf)=',SUM(REAL(eig%wvf(:,Ii,Ik,Is))**2+AIMAG(eig%wvf(:,Ii,Ik,Is))**2)
+                 FLUSH(6)
+                 CALL MPI_BARRIER(parallel%commy,mpinfo)
+#else
               DO Ii=1,nev
-
+#endif
+#ifdef MPI
+                 IF(wk(Ii_global,Ik,Is)<xtiny) CYCLE
+#else
                  IF(wk(Ii,Ik,Is)<xtiny) CYCLE
-
+#endif
+                 !calculation
                  DO Ip=1,nr
 
-                    rho(Ip)=rho(Ip)+wk(Ii,Ik,Is)* &
+                     rho(Ip)=rho(Ip)+wk(Ii_global,Ik,Is)* &
                   &   (REAL(eig%wvf(Ip,Ii,Ik,Is))**2+AIMAG(eig%wvf(Ip,Ii,Ik,Is))**2)
 
                  ENDDO
@@ -338,13 +435,16 @@ CONTAINS
 
         ENDDO
 
-        !symmetried density
+
+#ifdef MPI
+         CALL MPI_ALLREDUCE(rho,rho_global,nr,MPI_REAL8,MPI_SUM,parallel%comm2d,ierr)
+         rho=rho_global
+#endif
+         !symmetried density
         IF(Isym>=1)THEN
            CALL Symm_density_r(rho)
         ENDIF
-
         rhoS(:,Is)=rho(:)
-
      ENDDO
      rhoS(:,:)=rhoS(:,:)/dvol
      !sum rhoS
@@ -359,7 +459,7 @@ CONTAINS
      !
      IMPLICIT NONE
      !INPUT
-     INTEGER(I4B),INTENT(IN) :: nps,nev   !number of points/states
+     INTEGER(I4B),INTENT(IN) :: nps,nev  !number of points/states
      REAL(DP),INTENT(IN)     :: ne !number of charge
      TYPE(eigen_type) :: eig
      !OUT PUT
@@ -367,14 +467,27 @@ CONTAINS
      !LOCAL
      REAL(DP) :: tele
      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-     CALL Fermilevel(ne,nev,nk,kpt%wk,eig%val,Wsmear)
-
+#ifdef MPI
+      CALL Fermilevel(ne,nev,parallel%mygrid_range(3),kpt%wk,eig%val,Wsmear)
+      PRINT *, 'Fermi level=',fme
+      PRINT *, 'Electronic entropy=',ets
+      CALL MPI_BARRIER(parallel%comm,mpinfo)
+#else
+      CALL Fermilevel(ne,nev,nk,kpt%wk,eig%val,Wsmear)
+#endif
      !updating the charge density acrroding wke
-     CALL updaterho_PBC(nps,nev,eig,wke,rhoS,rho)
+      CALL updaterho_PBC(nps,nev,eig,wke,rhoS,rho)
+
      !Checking
      tele=SUM(rho)*dvol
      IF(ABS(tele-ne)>1e-6)THEN
+#ifdef MPI
+       IF(parallel%isroot) THEN
+#endif
         WRITE(*,*) 'The Density Updating is WROUNG',tele,ne
+#ifdef MPI
+       ENDIF
+#endif
         !> rescale
         rhoS=rhoS/tele*ne
         call sumrhoS(nps,rhoS,rho)
