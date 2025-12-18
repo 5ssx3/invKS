@@ -250,6 +250,8 @@ MODULE invKS_module
    IF (ALLOCATED(parallel%recvcounts)) DEALLOCATE(parallel%recvcounts)
    IF (ALLOCATED(parallel%displs)) DEALLOCATE(parallel%displs)
    IF (ALLOCATED(parallel%global_gridrange)) DEALLOCATE(parallel%global_gridrange)
+   IF (ALLOCATED(displs)) DEALLOCATE(displs)
+   IF (ALLOCATED(recvcounts)) DEALLOCATE(recvcounts)
    CALL destroy_eigen()
 #endif
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

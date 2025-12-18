@@ -31,7 +31,8 @@ GOAL = iks.x
 # containing object files for serial version
 WORKDIR = ../bin
 
-FFLAGS = -O3 -r8 -i4 -I${LIB_PATH_ROOT}/include -cpp -DMPI -module ${WORKDIR} -qmkl=parallel
+#FFLAGS = -O3 -r8 -i4 -I${LIB_PATH_ROOT}/include -cpp -DMPI -module ${WORKDIR} -qmkl=parallel
+FFLAGS = -qopenmp -O3 -r8 -i4 -I${LIB_PATH_ROOT}/include -cpp -DMPI -module ${WORKDIR} -qmkl=parallel
 #FFLAGS = -O3 -cpp  -module ${WORKDIR}
 #parallrl swetich
 #debug

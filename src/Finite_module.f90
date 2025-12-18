@@ -10,6 +10,9 @@ MODULE finite_module
    !##########################################################!}}}
    USE constants
    USE grid_module , ONLY : nr1,nr2,nr3,nr
+#ifdef MPI
+   USE omp_lib
+#endif
    IMPLICIT NONE
    !REAL(DP),ALLOCATABLE :: Laplcoe(:) !laplace coe
    REAL(DP),ALLOCATABLE :: Lapl(:,:)  !laplace total coe
@@ -311,10 +314,15 @@ CONTAINS
       derf(:,:) = 0.d0
       !df/dx
       ip=0
+      !$OMP PARALLEL DEFAULT(NONE)                                            &
+      !$OMP SHARED(ifun, derf, tBmat, Grad, nr1, nr2, nr3, norder, nr, mgfun) &
+      !$OMP PRIVATE(ix, iy, iz, ip, ish, irx, iry, irz)                           &
+      !$OMP FIRSTPRIVATE(lmgfun)
+      !$OMP DO COLLAPSE(3)
       DO iz=1,nr3
       DO iy=1,nr2
       DO ix=1,nr1
-         ip=ip+1
+         ip = (iz-1)*nr1*nr2 + (iy-1)*nr1 + ix
          DO ish=-norder,norder
             !3D map
             CALL pullbackPBC(ix+ish,nr1,irx) !MOD(MOD((ix+ish-1),nr1)+nr1,nr1)+1
@@ -329,12 +337,16 @@ CONTAINS
       ENDDO
       ENDDO
       ENDDO
+      !$OMP END DO
       !mod of grad
       IF(lmgfun)THEN
+         !$OMP DO
          DO ip=1,nr
             mgfun(ip)=SQRT(derf(1,ip)**2+derf(2,ip)**2+derf(3,ip)**2)
          ENDDO
+         !$OMP END DO
       ENDIF
+      !$OMP END PARALLEL
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE real_pbc_nabla1
    !--------------------------PARTING LINE-------------------------------
@@ -366,6 +378,10 @@ CONTAINS
       INTEGER(I4B) :: irx,iry,irz
       !>>>>>>>>>>>>>>>>>>>>> Main Body >>>>>>>>>>>>>>>>>>>>>>>>
       !
+      !$OMP PARALLEL DEFAULT(NONE)                                   &
+      !$OMP SHARED(ifun, ofun, Lapl, cell_mu, nr1, nr2, nr3, norder) &
+      !$OMP PRIVATE(ix, iy, iz, ish, irx, iry, irz)                       
+      !$OMP DO COLLAPSE(3)
       DO iz=1,nr3
       DO iy=1,nr2
       DO ix=1,nr1
@@ -404,6 +420,8 @@ CONTAINS
       ENDDO
       ENDDO
       ENDDO
+      !$OMP END DO
+      !$OMP END PARALLEL
       !>>>>>>>>>>>>>>>>>>>>> Main Body >>>>>>>>>>>>>>>>>>>>>>>>
    ENDSUBROUTINE real_pbc_nabla2!}}}
    !----------------------------PARTING LINE-----------------------------
@@ -421,10 +439,14 @@ CONTAINS
       derf(:,:) = CMPLX(0.d0,0.d0)
       !df/dx
       ip=0
+      !$OMP PARALLEL DEFAULT(NONE)                                      &
+      !$OMP SHARED(ifun, derf, tBmat, Grad, nr1, nr2, nr3, norder, nr)  &
+      !$OMP PRIVATE(ix, iy, iz, ip, ish, irx, iry, irz)                        
+      !$OMP DO COLLAPSE(3)
       DO iz=1,nr3
       DO iy=1,nr2
       DO ix=1,nr1
-         ip=ip+1
+         ip = (iz-1)*nr1*nr2 + (iy-1)*nr1 + ix
          DO ish=-norder,norder
             CALL pullbackPBC(ix+ish,nr1,irx) !MOD(MOD((ix+ish-1),nr1)+nr1,nr1)+1
             CALL pullbackPBC(iy+ish,nr2,iry) 
@@ -438,6 +460,8 @@ CONTAINS
       ENDDO
       ENDDO
       ENDDO
+      !$OMP END DO
+      !$OMP END PARALLEL
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE cmplx_pbc_nabla1
    !----------------------------PARTING LINE-----------------------------
@@ -469,6 +493,10 @@ CONTAINS
       INTEGER(I4B) :: irx,iry,irz
       !>>>>>>>>>>>>>>>>>>>>> Main Body >>>>>>>>>>>>>>>>>>>>>>>>
       !
+      !$OMP PARALLEL DEFAULT(NONE)                                   &
+      !$OMP SHARED(ifun, ofun, Lapl, cell_mu, nr1, nr2, nr3, norder) &
+      !$OMP PRIVATE(ix, iy, iz, ish, irx, iry, irz)                       
+      !$OMP DO COLLAPSE(3)
       DO iz=1,nr3
       DO iy=1,nr2
       DO ix=1,nr1
@@ -507,6 +535,8 @@ CONTAINS
       ENDDO
       ENDDO
       ENDDO
+      !$OMP END DO
+      !$OMP END PARALLEL
       !>>>>>>>>>>>>>>>>>>>>> Main Body >>>>>>>>>>>>>>>>>>>>>>>>
    ENDSUBROUTINE cmplx_pbc_nabla2!}}}
    !----------------------------PARTING LINE-----------------------------
