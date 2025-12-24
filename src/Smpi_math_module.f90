@@ -191,21 +191,6 @@ CONTAINS
          IF (parallel%isroot) WRITE(6, '(A)') "[ERROR] MPI_Dims_create failed"
          CALL MPI_Abort(parallel%comm, 103, ierr)
       ENDIF
-      IF (parallel%dims(1) > nk) THEN
-         parallel%dims(1) = nk
-         IF (nk == 0) THEN
-            IF (parallel%isroot) WRITE(6, '(A)') "[ERROR] nk=0, invalid grid size"
-            CALL MPI_Abort(parallel%comm, 101, ierr)
-         ENDIF
-         parallel%dims(2) = parallel%numprocs/nk
-         IF (mod(parallel%numprocs, nk) /= 0) THEN
-            parallel%dims(2) = parallel%dims(2) + 1
-         ENDIF
-         IF (parallel%dims(1)*parallel%dims(2) < parallel%numprocs) THEN
-            IF (parallel%isroot) print *, "error: Insufficient dimensions to accommodate process "
-            CALL MPI_Abort(parallel%comm, 1, mpinfo)
-         ENDIF
-      ENDIF
       parallel%periods = [.false., .false.]
       parallel%reorder = .false.
       CALL MPI_Cart_create(parallel%comm, parallel%ndims, parallel%dims, parallel%periods, parallel%reorder, parallel%comm2d, mpinfo)
@@ -250,10 +235,7 @@ CONTAINS
          ENDDO
       ENDDO
       !PRINT*,'parallel%comm2d_rank2sum',parallel%comm2d_rank2sum(parallel%rankx,parallel%ranky),'=','process',parallel%myid+1
-      IF (parallel%isroot) THEN
-         PRINT*, "2D Topology created: dims=", parallel%dims
-         WRITE(6, '(A,I0,A,I0)') "commx numprocs=", parallel%commx_numprocs, " commy numprocs=", parallel%commy_numprocs
-      ENDIF
+      IF (parallel%isroot) PRINT*, "2D Topology created: dims=", parallel%dims
    END SUBROUTINE smpi_init_2D
   !-----------------------divided line---------------------------
   !-----------------------divided line---------------------------

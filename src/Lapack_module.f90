@@ -901,7 +901,7 @@ CONTAINS
       CHARACTER(1), INTENT(IN)  :: opA, opB
       COMPLEX(DCP), INTENT(IN)  :: cab, cc
       COMPLEX(DCP), INTENT(INOUT) :: matC(:,:)
-      COMPLEX(DP),OPTIONAL,INTENT(OUT) :: matC_glob(:,:)
+      COMPLEX(DCP),OPTIONAL,INTENT(OUT) :: matC_glob(:,:)
       !local
       COMPLEX(DCP)   :: alpha, beta
       !ScaLapack
@@ -911,8 +911,8 @@ CONTAINS
       INTEGER(I4B) :: M, N ,K
       INTEGER(I4B) :: desc_matA(9), desc_matB(9), desc_matC(9)
       CHARACTER(1) :: opA_up, opB_up
-      INTEGER(I4B) :: desc_matC_glob(9), blacs_context_0
-      INTEGER(I4B) :: myrow_0, mycol_0, IA, JA, IB, JB
+      INTEGER(I4B) :: desc_matC_glob(9)
+      INTEGER(I4B) :: IA, JA, IB, JB
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       alpha = cab
       beta = cc
@@ -996,30 +996,19 @@ CONTAINS
          IF (SIZE(matC_glob,1) /= M_C .OR. SIZE(matC_glob,2) /= N_C) THEN
                info = -1; WRITE(*,*) 'matC_glob dim mismatch: expect (',M_C,',',N_C,') got (',SIZE(matC_glob,1),',',SIZE(matC_glob,2),')'; GOTO 999
          ENDIF
-         IF (parallel%commy_myid == 0) THEN
-            blacs_context_0 = parallel%commy
-            CALL BLACS_GRIDINIT(blacs_context_0, 'R', 1, 1)
-            CALL BLACS_GRIDINFO(blacs_context_0, 1, 1, myrow_0, mycol_0)
-            PRINT*, 'process ', parallel%myid, ': blacs_context_0 initialized at commy root','row_0=',myrow_0,' col_0=',mycol_0
-            CALL DESCINIT(desc_matC_glob, M_C, N_C, M_C, N_C, 0, 0, blacs_context_0, M_C, info)
-            IF (info /= 0) THEN
-               WRITE(*,*) 'DESCINIT desc_matC_glob failed at commy root, info=',info
-               GOTO 999
-            ENDIF
-         ELSE
-            blacs_context_0 = -1
+         CALL DESCINIT(desc_matC_glob, M_C, N_C, M_C, N_C, 0, 0, blacs_context, M_C, info)
+         IF (info /= 0) THEN
+            WRITE(*,*) 'DESCINIT desc_matC_glob failed at commy root, info=',info
+            GOTO 999
          ENDIF
-         PRINT*, 'process ', parallel%myid, ': started to call PZGEMR2D in scalapk_cmplx_matmat'
-         IA = 1; JA = 1+MYCOL*NB_C
-         IB = 1; JB = 1+MYCOL*NB_C
+         IA = 1; JA = 1
+         IB = 1; JB = 1
          CALL PZGEMR2D(M_C, N_C, &
                         matC, IA, JA, desc_matC, &
                         matC_glob, IB, JB, desc_matC_glob, &
                         blacs_context)
-         PRINT*, 'process ', parallel%myid, ': started to call MPI_BCAST in scalapk_cmplx_matmat'
          CALL MPI_BCAST(matC_glob, M_C*N_C, MPI_DOUBLE_COMPLEX, &
                         0, parallel%commy, ierr)
-         IF (parallel%commy_myid == 0) CALL BLACS_GRIDEXIT(blacs_context_0)
       ENDIF
       !
       999 CONTINUE
@@ -1046,7 +1035,7 @@ CONTAINS
       INTEGER(I4B) :: M, N ,K
       INTEGER(I4B) :: desc_matA(9), desc_matB(9), desc_matC(9)
       CHARACTER(1) :: opA_up, opB_up
-      INTEGER(I4B) :: desc_matC_glob(9),blacs_context_0
+      INTEGER(I4B) :: desc_matC_glob(9)
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       alpha=cab
       beta=cc
@@ -1131,19 +1120,11 @@ CONTAINS
          IF (SIZE(matC_glob,1) /= M_C .OR. SIZE(matC_glob,2) /= N_C) THEN
                info = -1; WRITE(*,*) 'matC_glob dim mismatch: expect (',M_C,',',N_C,') got (',SIZE(matC_glob,1),',',SIZE(matC_glob,2),')'; GOTO 999
          ENDIF
-         IF (parallel%commy_myid == 0) THEN
-            blacs_context_0 = parallel%commy
-            CALL BLACS_GRIDINIT(blacs_context_0, 'R', 1, 1)
-            CALL DESCINIT(desc_matC_glob, M_C, N_C, M_C, N_C, 0, 0, blacs_context_0, M_C, info)
-            IF (info /= 0) THEN
-               WRITE(*,*) 'DESCINIT desc_matC_glob failed at commy root, info=',info
-               GOTO 999
-            ENDIF
-         ELSE
-            blacs_context_0 = -1
-            desc_matC_glob = 0
-            desc_matC_glob(1) = 1
-            desc_matC_glob(3) = -1
+
+         CALL DESCINIT(desc_matC_glob, M_C, N_C, M_C, N_C, 0, 0, blacs_context, M_C, info)
+         IF (info /= 0) THEN
+            WRITE(*,*) 'DESCINIT desc_matC_glob failed at commy root, info=',info
+            GOTO 999
          ENDIF
 
          CALL PDGEMR2D(M_C, N_C, &
@@ -1153,7 +1134,6 @@ CONTAINS
 
          CALL MPI_BCAST(matC_glob, M_C*N_C, MPI_REAL8, &
                         0, parallel%commy, ierr)
-         IF (parallel%commy_myid == 0) CALL BLACS_GRIDEXIT(blacs_context_0)
       ENDIF
    999 CONTINUE
    IF (info /= 0) THEN

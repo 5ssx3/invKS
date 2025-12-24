@@ -422,21 +422,21 @@ CONTAINS
             !Overlap matrix
 #ifdef MPI
             ! PRINT*,'process',parallel%myid,'started to call scalapk_MM(X,X) in real_first_filter'
-            CALL scalapk_MM(X,X,'T','N',1.0_dp,0.0_dp,Shat_local)
+            CALL scalapk_MM(X,X,'T','N',1.0_dp,0.0_dp,Shat_local, Shat)
             ! PRINT*,'process',parallel%myid,'compeleted scalapk_MM(X,X) in real_first_filter'
-            IF (ALLOCATED(displs)) DEALLOCATE(displs)
-            IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
-            ALLOCATE(displs(parallel%commy_numprocs))
-            ALLOCATE(recevcounts(parallel%commy_numprocs))
-            CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4, &
-                        recevcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
-            displs(1) = 0
-            recevcounts = nev * recevcounts
-            DO j = 2,parallel%commy_numprocs
-               displs(j) = displs(j-1) +recevcounts(j-1)
-            ENDDO
-            CALL MPI_ALLGATHERV(Shat_local, nev*nst, MPI_REAL8, &
-                              Shat,recevcounts,displs,MPI_REAL8,parallel%commy,mpinfo)
+            ! IF (ALLOCATED(displs)) DEALLOCATE(displs)
+            ! IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
+            ! ALLOCATE(displs(parallel%commy_numprocs))
+            ! ALLOCATE(recevcounts(parallel%commy_numprocs))
+            ! CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4, &
+            !             recevcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
+            ! displs(1) = 0
+            ! recevcounts = nev * recevcounts
+            ! DO j = 2,parallel%commy_numprocs
+            !    displs(j) = displs(j-1) +recevcounts(j-1)
+            ! ENDDO
+            ! CALL MPI_ALLGATHERV(Shat_local, nev*nst, MPI_REAL8, &
+            !                   Shat,recevcounts,displs,MPI_REAL8,parallel%commy,mpinfo)
             ! PRINT*,'process',parallel%myid,'compeleted MPI_ALLGATHERV in real_first_filter'
 #else
             CALL lapk_MM(X,X,'T','N',1.0_dp,0.0_dp,Shat)
@@ -636,21 +636,21 @@ CONTAINS
          ELSE
 #ifdef MPI
             ! PRINT*,'process',parallel%myid,'started to call scalapk_MM(X,X) in cmplx_first_filter'
-            CALL scalapk_MM(X, X,'C','N', cmplx(1._dp,0._dp,DCP), cmplx(0._dp,0._dp,DCP), Shat_local)
+            CALL scalapk_MM(X, X,'C','N', cmplx(1._dp,0._dp,DCP), cmplx(0._dp,0._dp,DCP), Shat_local, Shat)
             ! PRINT*,'process',parallel%myid,'completed scalapk_MM(X,X) in cmplx_first_filter'
-            IF (ALLOCATED(displs)) DEALLOCATE(displs)
-            IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
-            ALLOCATE(displs(parallel%commy_numprocs))
-            ALLOCATE(recevcounts(parallel%commy_numprocs))
-            CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4, &
-                        recevcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
-            displs(1) = 0
-            recevcounts = nev * recevcounts
-            DO j = 2,parallel%commy_numprocs
-               displs(j) = displs(j-1) +recevcounts(j-1)
-            ENDDO
-            CALL MPI_ALLGATHERV(Shat_local, nev*nst, MPI_DOUBLE_COMPLEX, &
-                              Shat,recevcounts,displs,MPI_DOUBLE_COMPLEX,parallel%commy,mpinfo)
+            ! IF (ALLOCATED(displs)) DEALLOCATE(displs)
+            ! IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
+            ! ALLOCATE(displs(parallel%commy_numprocs))
+            ! ALLOCATE(recevcounts(parallel%commy_numprocs))
+            ! CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4, &
+            !             recevcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
+            ! displs(1) = 0
+            ! recevcounts = nev * recevcounts
+            ! DO j = 2,parallel%commy_numprocs
+            !    displs(j) = displs(j-1) +recevcounts(j-1)
+            ! ENDDO
+            ! CALL MPI_ALLGATHERV(Shat_local, nev*nst, MPI_DOUBLE_COMPLEX, &
+            !                   Shat,recevcounts,displs,MPI_DOUBLE_COMPLEX,parallel%commy,mpinfo)
             ! PRINT*,'process',parallel%myid,'compeleted MPI_ALLGATHERV in cmplx_first_filter'
 #else
             CALL lapk_MM(X,X,'T','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Shat)
@@ -710,7 +710,7 @@ CONTAINS
 #ifdef MPI
       INTEGER(I4B) :: q
       INTEGER(I4B),ALLOCATABLE :: displs(:), recevcounts(:)
-      REAL(DP) :: xhx_temp(nst,nst), xhx_local(nev,nst),V_q(nps,nst)
+      REAL(DP) :: xhx_local(nev,nst)
 #endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       ! PRINT*,'process:',parallel%myid,'Entering real_Rayleigh_quotient'
@@ -718,36 +718,36 @@ CONTAINS
       ! PRINT*,'process:',parallel%myid,'completed real_HX in real_Rayleigh_quotient'
 #ifdef MPI
       xhx_local = 0.0_DP
-      xhx_temp = 0.0_DP
-         DO q = 0,parallel%commy_numprocs-1
-            IF (q == parallel%commy_myid) THEN
-               V_q = x
-            ENDIF
-            call MPI_Bcast(V_q, nps*nst, MPI_REAL8, q, parallel%commy, mpinfo)
-            IF (mpinfo /= 0) THEN
-               IF (ALLOCATED(displs)) DEALLOCATE(displs)
-               IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
-               WRITE(*,*) 'MPI_Bcast failed at q=',q,'process ID=',parallel%myid
-               CALL MPI_Abort(parallel%commy, 1, mpinfo)
-            ENDIF
-            CALL lapk_MM(V_q, hx, 'T', 'N', 1._dp, 0._dp, xhx_temp)
-            ! PRINT*,'process:',parallel%myid,'completed lapk_MM(V_q, hx) in real_Rayleigh_quotient'
-            xhx_local(q*nst+1:(q+1)*nst, :) = xhx_temp
-            ! PRINT*,'process:',parallel%myid,'completed xhx_local(q*nst+1:(q+1)*nst, :) = xhx_temp in real_Rayleigh_quotient, q=',q
-         ENDDO
-      IF (ALLOCATED(displs)) DEALLOCATE(displs)
-      IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
-      ALLOCATE(displs(parallel%commy_numprocs))
-      ALLOCATE(recevcounts(parallel%commy_numprocs))
-      CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4,recevcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
-      recevcounts = nev * recevcounts
-      displs(1) = 0
-      DO q = 2,parallel%commy_numprocs
-         displs(q) = recevcounts(q-1) + displs(q-1)
-      ENDDO
-      CALL MPI_ALLGATHERV(xhx_local,nst*nev,MPI_REAL8,xhx,recevcounts,displs,MPI_REAL8,parallel%commy,mpinfo)
-      ! PRINT*,'process:',parallel%myid,'completed MPI_ALLGATHERV(xhx) in real_Rayleigh_quotient'
-      DEALLOCATE(displs, recevcounts)
+      ! DO q = 0,parallel%commy_numprocs-1
+      !    IF (q == parallel%commy_myid) THEN
+      !       V_q = x
+      !    ENDIF
+      !    call MPI_Bcast(V_q, nps*nst, MPI_REAL8, q, parallel%commy, mpinfo)
+      !    IF (mpinfo /= 0) THEN
+      !       IF (ALLOCATED(displs)) DEALLOCATE(displs)
+      !       IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
+      !       WRITE(*,*) 'MPI_Bcast failed at q=',q,'process ID=',parallel%myid
+      !       CALL MPI_Abort(parallel%commy, 1, mpinfo)
+      !    ENDIF
+      !    CALL lapk_MM(V_q, hx, 'T', 'N', 1._dp, 0._dp, xhx_temp)
+      !    ! PRINT*,'process:',parallel%myid,'completed lapk_MM(V_q, hx) in real_Rayleigh_quotient'
+      !    xhx_local(q*nst+1:(q+1)*nst, :) = xhx_temp
+      !    ! PRINT*,'process:',parallel%myid,'completed xhx_local(q*nst+1:(q+1)*nst, :) = xhx_temp in real_Rayleigh_quotient, q=',q
+      ! ENDDO
+      CALL scalapk_MM(x, hx, 'T', 'N', 1._dp, 0._dp, xhx_local, xhx)
+      ! IF (ALLOCATED(displs)) DEALLOCATE(displs)
+      ! IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
+      ! ALLOCATE(displs(parallel%commy_numprocs))
+      ! ALLOCATE(recevcounts(parallel%commy_numprocs))
+      ! CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4,recevcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
+      ! recevcounts = nev * recevcounts
+      ! displs(1) = 0
+      ! DO q = 2,parallel%commy_numprocs
+      !    displs(q) = recevcounts(q-1) + displs(q-1)
+      ! ENDDO
+      ! CALL MPI_ALLGATHERV(xhx_local,nst*nev,MPI_REAL8,xhx,recevcounts,displs,MPI_REAL8,parallel%commy,mpinfo)
+      ! ! PRINT*,'process:',parallel%myid,'completed MPI_ALLGATHERV(xhx) in real_Rayleigh_quotient'
+      ! DEALLOCATE(displs, recevcounts)
 #else
       CALL lapk_MM(x,hx,'T','N',1._dp,0._dp,xhx)
 #endif
@@ -920,16 +920,16 @@ CONTAINS
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !Calculate the overlap matrix
 #ifdef MPI
-      CALL scalapk_MM(X,X,'T','N',1._dp,0._dp,S_hat_local)
-      CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4, &
-                        recvcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
-      displs(1) = 0
-      recvcounts = nev * recvcounts
-      DO j = 2,parallel%commy_numprocs
-         displs(j) = displs(j-1) +recvcounts(j-1)
-      ENDDO
-      CALL MPI_ALLGATHERV(S_hat_local, nev*nst, MPI_REAL8, &
-                        S_hat,recvcounts,displs,MPI_REAL8,parallel%commy,mpinfo)
+      CALL scalapk_MM(X,X,'T','N',1._dp,0._dp,S_hat_local, S_hat)
+      ! CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4, &
+      !                   recvcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
+      ! displs(1) = 0
+      ! recvcounts = nev * recvcounts
+      ! DO j = 2,parallel%commy_numprocs
+      !    displs(j) = displs(j-1) +recvcounts(j-1)
+      ! ENDDO
+      ! CALL MPI_ALLGATHERV(S_hat_local, nev*nst, MPI_REAL8, &
+      !                   S_hat,recvcounts,displs,MPI_REAL8,parallel%commy,mpinfo)
 #else
       CALL lapk_MM(X,X,'T','N',1._dp,0._dp,S_hat)
 #endif
@@ -1047,32 +1047,33 @@ CONTAINS
 #ifdef MPI
       xhx_local = (0.0_DP, 0.0_DP)
       xhx_temp = (0.0_DP, 0.0_DP)
-      DO q = 0,parallel%commy_numprocs-1
-         IF (q == parallel%commy_myid) THEN
-            V_q = x
-         ENDIF
-         call MPI_Bcast(V_q, nps*nst, MPI_DOUBLE_COMPLEX, q, parallel%commy, mpinfo)
-         IF (mpinfo /= 0) THEN
-            IF (ALLOCATED(displs)) DEALLOCATE(displs)
-            IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
-            WRITE(*,*) 'MPI_Bcast failed at q=',q,'process ID=',parallel%myid
-            CALL MPI_Abort(parallel%commy, 1, mpinfo)
-         ENDIF
-         CALL lapk_MM(V_q, hx, 'C', 'N', cmplx(1.0,0.0,DCP),cmplx(0._dp,0._dp,DCP), xhx_temp)
-         xhx_local(q*nst+1:(q+1)*nst, :) = xhx_temp
-      ENDDO
-      IF (ALLOCATED(displs)) DEALLOCATE(displs)
-      IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
-      ALLOCATE(displs(parallel%commy_numprocs))
-      ALLOCATE(recevcounts(parallel%commy_numprocs))
-      CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4,recevcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
-      recevcounts = nev * recevcounts
-      displs(1) = 0
-      DO q = 2,parallel%commy_numprocs
-         displs(q) = recevcounts(q-1) + displs(q-1)
-      ENDDO
-      CALL MPI_ALLGATHERV(xhx_local,nst*nev,MPI_DOUBLE_COMPLEX,xhx,recevcounts,displs,MPI_DOUBLE_COMPLEX,parallel%commy,mpinfo)
-      DEALLOCATE(displs, recevcounts)
+      ! DO q = 0,parallel%commy_numprocs-1
+      !    IF (q == parallel%commy_myid) THEN
+      !       V_q = x
+      !    ENDIF
+      !    call MPI_Bcast(V_q, nps*nst, MPI_DOUBLE_COMPLEX, q, parallel%commy, mpinfo)
+      !    IF (mpinfo /= 0) THEN
+      !       IF (ALLOCATED(displs)) DEALLOCATE(displs)
+      !       IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
+      !       WRITE(*,*) 'MPI_Bcast failed at q=',q,'process ID=',parallel%myid
+      !       CALL MPI_Abort(parallel%commy, 1, mpinfo)
+      !    ENDIF
+      !    CALL lapk_MM(V_q, hx, 'C', 'N', cmplx(1.0,0.0,DCP),cmplx(0._dp,0._dp,DCP), xhx_temp)
+      !    xhx_local(q*nst+1:(q+1)*nst, :) = xhx_temp
+      ! ENDDO
+      CALL scalapk_MM(x, hx, 'C', 'N', cmplx(1.0,0.0,DCP),cmplx(0._dp,0._dp,DCP), xhx_local, xhx)
+      ! IF (ALLOCATED(displs)) DEALLOCATE(displs)
+      ! IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
+      ! ALLOCATE(displs(parallel%commy_numprocs))
+      ! ALLOCATE(recevcounts(parallel%commy_numprocs))
+      ! CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4,recevcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
+      ! recevcounts = nev * recevcounts
+      ! displs(1) = 0
+      ! DO q = 2,parallel%commy_numprocs
+      !    displs(q) = recevcounts(q-1) + displs(q-1)
+      ! ENDDO
+      ! CALL MPI_ALLGATHERV(xhx_local,nst*nev,MPI_DOUBLE_COMPLEX,xhx,recevcounts,displs,MPI_DOUBLE_COMPLEX,parallel%commy,mpinfo)
+      ! DEALLOCATE(displs, recevcounts)
 #else
       CALL lapk_MM(x,hx,'C','N',cmplx(1.0,0.0,DCP),cmplx(0._dp,0._dp,DCP),xhx)
 #endif
@@ -1203,16 +1204,16 @@ CONTAINS
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !Calculate the overlap matrix
 #ifdef MPI
-      CALL scalapk_MM(X,X,'C','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),S_hat_local)
-      CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4, &
-                        recvcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
-      displs(1) = 0
-      recvcounts = nev * recvcounts
-      DO j = 2,parallel%commy_numprocs
-         displs(j) = recvcounts(j-1) + displs(j-1)
-      ENDDO
-      CALL MPI_ALLGATHERV(S_hat_local, nev*nst, MPI_DOUBLE_COMPLEX, &
-                        S_hat,recvcounts,displs,MPI_DOUBLE_COMPLEX,parallel%commy,mpinfo)
+      CALL scalapk_MM(X,X,'C','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),S_hat_local, S_hat)
+      ! CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4, &
+      !                   recvcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
+      ! displs(1) = 0
+      ! recvcounts = nev * recvcounts
+      ! DO j = 2,parallel%commy_numprocs
+      !    displs(j) = recvcounts(j-1) + displs(j-1)
+      ! ENDDO
+      ! CALL MPI_ALLGATHERV(S_hat_local, nev*nst, MPI_DOUBLE_COMPLEX, &
+      !                   S_hat,recvcounts,displs,MPI_DOUBLE_COMPLEX,parallel%commy,mpinfo)
 #else
       CALL lapk_MM(X,X,'T','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),S_hat)
 #endif

@@ -23,7 +23,16 @@ CONTAINS
      CALL cmplx_keop(p,Ik,kp)
      !collection
      !q(:)=q(:)+kp(:)+veff1d(:)*p(:)
-     q(:)=kp(:)+veff1d(:)*p(:)
+
+     !$OMP PARALLEL DEFAULT(NONE)   &
+     !$OMP SHARED(q, kp, veff1d, p, dimen) &
+     !$OMP PRIVATE(I)
+     !$OMP DO
+      DO I = 1,dimen
+         q(I)=kp(I)+veff1d(I)*p(I)
+      ENDDO
+      !$OMP END DO
+      !$OMP END PARALLEL
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   ENDSUBROUTINE cmplx_matvec
 !-----------------------DIVIDER-LINE--------------------------
@@ -44,10 +53,18 @@ CONTAINS
      !CALL real_nlocmatvec(p,q)
      !calculate the kinetic part(kp=-0.5*nabla2*p)
      CALL real_pbc_nabla2(p,kp)
-     kp(:)=-0.5_DP*kp(:)
      !collection
      !q(:)=q(:)+kp(:) +veff1d(:)*p(:)
-     q(:)=kp(:) +veff1d(:)*p(:)
+     
+     !$OMP PARALLEL DEFAULT(NONE)         &
+     !$OMP SHARED(q, kp, veff1d, p, dimen)&
+     !$OMP PRIVATE(I)
+     !$OMP DO
+      DO I = 1,dimen
+         q(I)=-0.5_DP*kp(I) +veff1d(I)*p(I)
+      ENDDO
+      !$OMP END DO
+      !$OMP END PARALLEL
      !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
   ENDSUBROUTINE real_matvec
 !!-----------------------DIVIDER-LINE--------------------------
