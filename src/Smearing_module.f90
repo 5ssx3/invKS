@@ -484,10 +484,10 @@ CONTAINS
      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 #ifdef MPI
       CALL Fermilevel(ne,nev,parallel%mygrid_range(3),kpt%wk,eig%val,Wsmear)
-      IF (parallel%isroot) THEN
-         PRINT *, 'Fermi level=',fme
-         PRINT *, 'Electronic entropy=',ets
-      ENDIF
+      ! IF (parallel%isroot) THEN
+      !    PRINT *, 'Fermi level=',fme
+      !    PRINT *, 'Electronic entropy=',ets
+      ! ENDIF
 #else
       CALL Fermilevel(ne,nev,nk,kpt%wk,eig%val,Wsmear)
 #endif
@@ -495,7 +495,7 @@ CONTAINS
       CALL updaterho_PBC(nps,nev,eig,wke,rhoS,rho)
 
      !Checking
-     IF (parallel%isroot) PRINT*,'rho(1:5)=',rho(1:5)
+   !   IF (parallel%isroot) PRINT*,'rho(1:5)=',rho(1:5)
      tele=SUM(rho)*dvol
      IF(ABS(tele-ne)>1e-6)THEN
 #ifdef MPI
