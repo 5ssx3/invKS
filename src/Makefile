@@ -7,7 +7,7 @@ CC = g++
 LINKER = $(FC)
 LOPT_DIR :=LBFGS CGplus
 
-MODULES =Constants.o Smpi_math_module.o Parameters.o Math.o Cellsymmetry_module.o \
+MODULES =Constants.o Parameters.o Smpi_math_module.o Math.o Cellsymmetry_module.o \
 	 Struct_module.o Fourier.o Read_module.o Grid_symmetry.o Finite_module.o\
 	  Begin_module.o Smearing_module.o  Lapack_module.o Matvec_module.o\
 	 Chebyshev_fliter.o lbfgsb.o cgfam.o cgsearch.o blas.o Opt_mdoule.o\

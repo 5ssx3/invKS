@@ -385,9 +385,10 @@ CONTAINS
               !Gamma point
 #ifdef MPI
                DO Ii=1,parallel%nstate_proc
-                  Ii_global=parallel%sub2sum(1,parallel%commy_myid+1)+Ii-1
-                  ! PRINT*,'process', parallel%myid, 'Gamma point: Ik_global=',Ik_global,' Ii_global=',Ii_global,' wke=',wk(Ii_global,Ik,Is)
-                  ! PRINT*,'process', parallel%myid, 'Gamma point: Ik_global=',Ik_global,' SUM(wvfG)=',SUM(eig%wvfG(:,Ii,Is)**2)
+                  Ii_global=parallel%sub2sum(Ii,parallel%commy_myid+1)
+                  ! PRINT*,'process', parallel%myid, 'Gamma point: Ik_global=',Ik_global,' Ii_global=',Ii_global
+                  ! PRINT*,'process', parallel%myid, 'Gamma point: Ik_global=',Ik_global,' SUM(wvfG)=',SUM(eig%wvfG(:,Ii,Is)**2),' wke=',wk(Ii_global,Ik,Is)
+                  FLUSH(6)
 #else
                DO Ii=1,nev
 #endif
@@ -410,10 +411,10 @@ CONTAINS
               !Non-Gamma-k
 #ifdef MPI
               DO Ii=1,parallel%nstate_proc
-                 Ii_global=parallel%sub2sum(1,parallel%commy_myid+1)+Ii-1
-               !   PRINT*,'process', parallel%myid, 'Non-Gamma point: Ik_global=',Ik_global,' Ii_global=',Ii_global,' SUM(wvf)=',SUM(REAL(eig%wvf(:,Ii,Ik,Is))**2+AIMAG(eig%wvf(:,Ii,Ik,Is))**2)
-               !   FLUSH(6)
-               !   CALL MPI_BARRIER(parallel%commy,mpinfo)
+                 Ii_global=parallel%sub2sum(Ii,parallel%commy_myid+1)
+               !   PRINT*,'process', parallel%myid, 'Non-Gamma point: Ik_global=',Ik_global,' Ii_global=',Ii_global
+               !   PRINT*,'process', parallel%myid,' SUM(wvf)=',SUM(REAL(eig%wvf(:,Ii,Ik,Is))**2+AIMAG(eig%wvf(:,Ii,Ik,Is))**2)
+                 FLUSH(6)
 #else
               DO Ii=1,nev
 #endif
@@ -445,7 +446,7 @@ CONTAINS
          ! CALL MPI_BARRIER(parallel%comm,mpinfo)
          !
          ! PRINT*,'process', parallel%myid, 'rho_local(1:5) before MPI_ALLREDUCE=',rho(1:5)
-         CALL MPI_ALLREDUCE(rho,rho_global,nr,MPI_REAL8,MPI_SUM,parallel%comm2d,ierr)
+         CALL MPI_ALLREDUCE(rho,rho_global,nr,MPI_REAL8,MPI_SUM,parallel%comm,ierr)
          rho=rho_global
          !debug
          ! IF (parallel%isroot) THEN
@@ -483,9 +484,10 @@ CONTAINS
      !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 #ifdef MPI
       CALL Fermilevel(ne,nev,parallel%mygrid_range(3),kpt%wk,eig%val,Wsmear)
-      ! PRINT *, 'Fermi level=',fme
-      ! PRINT *, 'Electronic entropy=',ets
-      ! CALL MPI_BARRIER(parallel%comm,mpinfo)
+      IF (parallel%isroot) THEN
+         PRINT *, 'Fermi level=',fme
+         PRINT *, 'Electronic entropy=',ets
+      ENDIF
 #else
       CALL Fermilevel(ne,nev,nk,kpt%wk,eig%val,Wsmear)
 #endif
@@ -493,6 +495,7 @@ CONTAINS
       CALL updaterho_PBC(nps,nev,eig,wke,rhoS,rho)
 
      !Checking
+     IF (parallel%isroot) PRINT*,'rho(1:5)=',rho(1:5)
      tele=SUM(rho)*dvol
      IF(ABS(tele-ne)>1e-6)THEN
 #ifdef MPI

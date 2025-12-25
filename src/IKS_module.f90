@@ -58,10 +58,10 @@ MODULE invKS_module
       CALL smear_updaterho(nr,nev,ne_r,eigen,grid%rhoS,grid%rho)
 
 #ifdef MPI
-      IF (ALLOCATED(recvcounts)) DEALLOCATE(recvcounts)
-      IF (ALLOCATED(displs)) DEALLOCATE(displs)
-      ALLOCATE(recvcounts(parallel%commy_numprocs))
-      ALLOCATE(displs(parallel%commy_numprocs))
+      ! IF (ALLOCATED(recvcounts)) DEALLOCATE(recvcounts)
+      ! IF (ALLOCATED(displs)) DEALLOCATE(displs)
+      ! ALLOCATE(recvcounts(parallel%commy_numprocs))
+      ! ALLOCATE(displs(parallel%commy_numprocs))
       IF (parallel%isroot) THEN
 #endif
       PRINT*,'Total electrons testing:',SUM(grid%rho)*dvol

@@ -32,7 +32,7 @@ CONTAINS
       INTEGER(I4B) :: seed_size
       INTEGER(I4B) :: seed(2)
 #ifdef MPI
-      INTEGER(I4B) :: ierr , i
+      INTEGER(I4B) :: ierr ,i ,j, s
       INTEGER(I4B) :: Ik_global
       INTEGER(I4B) :: Ik_local
       INTEGER(I4B) :: recvcount
@@ -48,12 +48,8 @@ CONTAINS
       IF (ALLOCATED(X0_global)) DEALLOCATE(X0_global)
       IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts, STAT=ierr)
       IF (ALLOCATED(displs)) DEALLOCATE(displs, STAT=ierr)
-      IF (parallel%isroot) THEN
-         ALLOCATE(X0_global(nps,nev))
-         ALLOCATE(X0(nps,parallel%nstate_proc))
-      ELSE
-         ALLOCATE(X0(nps,parallel%nstate_proc))
-      ENDIF
+      ALLOCATE(X0_global(nps,nev))
+      ALLOCATE(X0(nps,parallel%nstate_proc))
       IF (parallel%isroot) THEN
 #endif
          PRINT*,'Building Cheby-Subspace for this task ...'
@@ -97,28 +93,47 @@ CONTAINS
       ENDIF
 #endif
 #ifdef MPI
-      ALLOCATE(recevcounts(parallel%commy_numprocs))
-      ALLOCATE(displs(parallel%commy_numprocs))
-      CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4,recevcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
-      recevcounts = nps*recevcounts
-      displs(1) = 0
-      DO i= 2,parallel%commy_numprocs
-         displs(i) = recevcounts(i-1) + displs(i-1)
-      ENDDO
-      CALL MPI_Barrier(parallel%commy, mpinfo)
-      recvcount = nps * parallel%nstate_proc
+      ! ALLOCATE(recevcounts(parallel%commy_numprocs))
+      ! CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4,recevcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
+      ! IF (parallel%commx_myid == 0) THEN
+      !    IF (parallel%isroot) THEN
+      !       DO i=1,parallel%commy_numprocs
+      !          DO j=1,recevcounts(i)
+      !             s = parallel%sub2sum(j,i)
+      !             X0_(:,j) = X0_global(s)
+      !          ENDDO
+      !          CALL MPI_SEND(X0,nps*recevcounts(i),MPI_REAL8,X0)
+      ! ENDIF
+      IF (parallel%commx_myid == 0) THEN
+         CALL MPI_BCAST(X0_global,nps*nev,MPI_REAL8,0,parallel%commy,mpinfo)
+         DO i=1,parallel%nstate_proc
+            s = parallel%sub2sum(i,parallel%commy_myid+1)
+            X0(:,i) = X0_global(:,s)
+         ENDDO
+      ENDIF
+      CALL MPI_BCAST(X0,nps*parallel%nstate_proc,MPI_REAL8,0,parallel%commx,mpinfo)
+      ! ALLOCATE(recevcounts(parallel%commy_numprocs))
+      ! ALLOCATE(displs(parallel%commy_numprocs))
+      ! CALL MPI_ALLGATHER(parallel%nstate_proc,1,MPI_INTEGER4,recevcounts,1,MPI_INTEGER4,parallel%commy,mpinfo)
+      ! recevcounts = nps*recevcounts
+      ! displs(1) = 0
+      ! DO i= 2,parallel%commy_numprocs
+      !    displs(i) = recevcounts(i-1) + displs(i-1)
+      ! ENDDO
+      ! CALL MPI_Barrier(parallel%commy, mpinfo)
+      ! recvcount = nps * parallel%nstate_proc
 
-      IF (parallel%isroot) THEN
-         CALL MPI_Scatterv(X0_global,recevcounts,displs,MPI_REAL8,X0,recvcount,MPI_REAL8, 0, parallel%commy, mpinfo)
-      ELSE
-         CALL MPI_Scatterv(MPI_BOTTOM, [0], [0], MPI_REAL8, X0, recvcount, MPI_REAL8, 0, parallel%commy, mpinfo)
-      ENDIF
-      CALL MPI_BCAST(X0, parallel%nstate_proc*nps, MPI_REAL8, 0, parallel%commx, mpinfo)
-      IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
-      IF (ALLOCATED(displs)) DEALLOCATE(displs)
-      IF (parallel%isroot) THEN
+      ! IF (parallel%isroot) THEN
+      !    CALL MPI_Scatterv(X0_global,recevcounts,displs,MPI_REAL8,X0,recvcount,MPI_REAL8, 0, parallel%commy, mpinfo)
+      ! ELSE
+      !    CALL MPI_Scatterv(MPI_BOTTOM, [0], [0], MPI_REAL8, X0, recvcount, MPI_REAL8, 0, parallel%commy, mpinfo)
+      ! ENDIF
+      ! CALL MPI_BCAST(X0, parallel%nstate_proc*nps, MPI_REAL8, 0, parallel%commx, mpinfo)
+      ! IF (ALLOCATED(recevcounts)) DEALLOCATE(recevcounts)
+      ! IF (ALLOCATED(displs)) DEALLOCATE(displs)
+      ! IF (parallel%isroot) THEN
          IF (ALLOCATED(X0_global)) DEALLOCATE(X0_global)
-      ENDIF
+      ! ENDIF
       CALL Init_scala()
       CALL MPI_Barrier(parallel%comm, mpinfo)
 #endif
@@ -189,6 +204,7 @@ CONTAINS
             ENDIF
          ENDDO
       ENDDO
+   IF (ALLOCATED(X0)) DEALLOCATE(X0)
 #endif
       !<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
    ENDSUBROUTINE BuildSubspace
@@ -249,7 +265,7 @@ CONTAINS
       !REAL(DP) :: a,b,al
       REAL(DP),DIMENSION(nev,nev) :: Shat,Hhat,Qs
       REAL(DP) :: Shat_local(nev,nst), Qs_local(nev,nst)
-      INTEGER(I4B),ALLOCATABLE :: displs(:), recevcounts(:),i,s_start,s_end
+      INTEGER(I4B),ALLOCATABLE :: displs(:), recevcounts(:),i, j, s
 #else
       REAL(DP),INTENT(INOUT) :: X(nps,nev) !subspace
       REAL(DP),INTENT(OUT) :: D(:)      !eigenvalue
@@ -296,10 +312,11 @@ CONTAINS
       !-------------------
       !rotation
 #ifdef MPI
-      s_start = parallel%sub2sum(1,parallel%commy_myid+1)
-      s_end = parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1)
-      Qs_local = Qs(:,s_start:s_end)
-      CALL lapk_MM(X,Qs_local,'N','N',1.0_dp,0.0_dp,Xnew)
+      DO j = 1,nst
+         s = parallel%sub2sum(j,parallel%commy_myid+1)
+         Qs_local(:,j) = Qs(:,s)
+      ENDDO
+      CALL scalapk_MM(X,Qs_local,'N','N',1.0_dp,0.0_dp,Xnew)
 #else
       CALL lapk_MM(X,Qs,'N','N',1.0_dp,0.0_dp,Xnew)
 #endif
@@ -382,7 +399,7 @@ CONTAINS
       INTEGER(I4B) :: BCAST_ID_local, BCAST_ID
       REAL(DP),DIMENSION(nev,nst) :: Shat_local, Qs_local
       INTEGER(I4B),ALLOCATABLE :: displs(:), recevcounts(:)
-      INTEGER(I4B) :: j,s_start,s_end
+      INTEGER(I4B) :: j,s
 #endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !low up bound
@@ -463,9 +480,10 @@ CONTAINS
       ENDDO
       !rotation
 #ifdef MPI
-      s_start = parallel%sub2sum(1,parallel%commy_myid+1)
-      s_end = parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1)
-      Qs_local = Qs(:,s_start:s_end)
+      DO j = 1,nst
+         s = parallel%sub2sum(j,parallel%commy_myid+1)
+         Qs_local(:,j) = Qs(:,s)
+      ENDDO
       CALL scalapk_MM(X,Qs_local,'N','N',1.0_dp,0.0_dp,Xnew)
       ! PRINT*,'process',parallel%myid,'compeleted lapk_MM(X,Qs_local) in real_first_filter'
 #else
@@ -593,7 +611,7 @@ CONTAINS
       INTEGER(I4B) :: BCAST_ID_local, BCAST_ID
       COMPLEX(DCP),DIMENSION(nev,nst) :: Shat_local, Qs_local
       INTEGER(I4B),ALLOCATABLE :: displs(:), recevcounts(:)
-      INTEGER(I4B) :: j, s_start, s_end
+      INTEGER(I4B) :: j, s
 #endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !low up bound
@@ -678,9 +696,10 @@ CONTAINS
       ENDDO
       !rotation
 #ifdef MPI
-      s_start = parallel%sub2sum(1,parallel%commy_myid+1)
-      s_end = parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1)
-      Qs_local = Qs(:,s_start:s_end)
+      DO j = 1,nst
+         s = parallel%sub2sum(j,parallel%commy_myid+1)
+         Qs_local(:,j) = Qs(:,s)
+      ENDDO
       CALL scalapk_MM(X,Qs_local,'N','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Xnew)
       ! PRINT*,'process',parallel%myid,'completed scalapk_MM(X,Qs_local) in cmplx_first_filter'
 #else
@@ -915,7 +934,7 @@ CONTAINS
       REAL(DP) :: Xnew(nps,nst)
 #ifdef MPI
       REAL(DP) :: S_hat_local(nev,nst), Q_local(nev,nst)
-      INTEGER(I4B) :: j, s_end, s_start
+      INTEGER(I4B) :: j, s
 #endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !Calculate the overlap matrix
@@ -939,9 +958,10 @@ CONTAINS
       CALL lapk_Eigen(nev,H_hat,S_hat,Q,D)
       !X=XQ
 #ifdef MPI
-      s_start = parallel%sub2sum(1,parallel%commy_myid+1)
-      s_end = parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1)
-      Q_local = Q(:,s_start:s_end)
+      DO j = 1,nst
+         s = parallel%sub2sum(j,parallel%commy_myid+1)
+         Q_local(:,j) = Q(:,s)
+      ENDDO
       CALL scalapk_MM(X,Q_local,'N','N',1._dp,0._dp,Xnew)
 #else
       CALL lapk_MM(X,Q,'N','N',1._dp,0._dp,Xnew)
@@ -1199,7 +1219,7 @@ CONTAINS
       COMPLEX(DCP) :: Xnew(nps,nst)
 #ifdef MPI
       COMPLEX(DCP) :: S_hat_local(nev,nst), Q_local(nev,nst)
-      INTEGER(I4B) :: j, s_end, s_start
+      INTEGER(I4B) :: j, s
 #endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !Calculate the overlap matrix
@@ -1223,9 +1243,10 @@ CONTAINS
       CALL lapk_Eigen(nev,H_hat,S_hat,Q,D)
       !X=XQ
 #ifdef MPI
-      s_start = parallel%sub2sum(1,parallel%commy_myid+1)
-      s_end = parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1)
-      Q_local = Q(:,s_start:s_end)
+      DO j = 1,nst
+         s = parallel%sub2sum(j,parallel%commy_myid+1)
+         Q_local(:,j) = Q(:,s)
+      ENDDO
       CALL scalapk_MM(X,Q_local,'N','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Xnew)
 #else 
       CALL lapk_MM(X,Q,'N','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Xnew)
@@ -1246,7 +1267,7 @@ CONTAINS
       COMPLEX(DCP),DIMENSION(sn,sn) :: Hhat,Qs
 #ifdef MPI
       COMPLEX(DP) :: Qs_local(nev,sn)
-      INTEGER(I4B) :: s_end, s_start
+      INTEGER(I4B) :: j, s
 #endif
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
       !F0:OrthNorm
@@ -1262,9 +1283,10 @@ CONTAINS
       !F3:X=XQ
       !X=MATMUL( X , Q )
 #ifdef MPI
-      s_start = parallel%sub2sum(1,parallel%commy_myid+1)
-      s_end = parallel%sub2sum(parallel%nstate_proc,parallel%commy_myid+1)
-      Qs_local = Qs(:,s_start:s_end)
+      DO j = 1,sn
+         s = parallel%sub2sum(j,parallel%commy_myid+1)
+         Qs_local(:,j) = Qs(:,s)
+      ENDDO
       CALL scalapk_MM(X,Qs_local,'N','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Xnew)
 #else
       CALL lapk_MM(X,Qs,'N','N',cmplx(1._dp,0._dp,DCP),cmplx(0._dp,0._dp,DCP),Xnew)

@@ -15,6 +15,9 @@ MODULE parameters
                 &   kgrid(3)=-1 ,  &  !k-grid mesh
                 &   nssp=0          !number of simulation steps
    INTEGER(I4B)  :: IGamma=-1
+#ifdef MPI
+   INTEGER(I4B) :: BLOCK_MBNB = 1
+#endif
    !        
    REAL(DP)      :: kspacing=0.5   !input k-spacing 
    REAL(DP)      :: kshift(3)=0.d0   !input k-spacing 

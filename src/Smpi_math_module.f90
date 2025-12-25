@@ -191,6 +191,7 @@ CONTAINS
          IF (parallel%isroot) WRITE(6, '(A)') "[ERROR] MPI_Dims_create failed"
          CALL MPI_Abort(parallel%comm, 103, ierr)
       ENDIF
+      ! parallel%dims = [2, 8]
       parallel%periods = [.false., .false.]
       parallel%reorder = .false.
       CALL MPI_Cart_create(parallel%comm, parallel%ndims, parallel%dims, parallel%periods, parallel%reorder, parallel%comm2d, mpinfo)
@@ -849,126 +850,131 @@ CONTAINS
    !   ENDIF
    ! END Subroutine states_split
    !---------------------------------------------------------------------
-   ! Subroutine array_split(nev)
-   !   USE parameters , ONLY: BLOCK_MBNB
-   !   IMPLICIT NONE
-   !   !>> total states to calculate
-   !   INTEGER(I4B),INTENT(IN)  ::  nev
-   !   INTEGER(I4B)             :: average,redund
-   !   ! INTEGER(I4B)             :: i,j,counter,n_temp
-   !   INTEGER(I4B) :: i,j,n_temp,seq_local,seq_global
-   !   !>=================================
-   !   !>> spili eigen solver
-   !   average=nev/(parallel%dims(1)*BLOCK_MBNB)
-   !   IF(average==0)THEN
-   !      IF(parallel%isroot)WRITE(6,*)"[ ERROR ]: smaller block or parallel cores"
-   !      stop
-   !   ENDIF
-   !   redund=mod(nev,parallel%dims(1)*BLOCK_MBNB)
-   !   IF(parallel%ranky*BLOCK_MBNB.lt.redund)THEN
-   !      parallel%nstate_proc=average*BLOCK_MBNB+min(BLOCK_MBNB,redund-parallel%ranky*BLOCK_MBNB)
-   !   ELSE
-   !      parallel%nstate_proc=average*BLOCK_MBNB
-   !   ENDIF 
-   !   !>> set array map associated processes
-   !   ALLOCATE(parallel%sub2sum((average+1)*BLOCK_MBNB,parallel%dims(1)))
-   !   !>> set initial value
-   !   parallel%sub2sum=-2
-   !   seq_local=0
-   !   seq_global=0
-   !   setmap:DO j=1,nev,1
-   !      seq_local = seq_local + 1
-   !      DO i=1,parallel%dims(1),1
-   !         seq_global = seq_global + 1
-   !         parallel%sub2sum(seq_local,i) = seq_global
-   !         if(seq_global == nev)exit setmap
-   !      ENDDO
-   !   ENDDO setmap
-
-   !   ! counter=0
-   !   ! !>> assignment
-   !   ! DO j=1,parallel%numprocs,1
-   !   !    IF(parallel%myid.eq.j-1)n_temp=parallel%nstate_proc
-   !   !    CALL MPI_BCAST(n_temp,1,MPI_INTEGER4,j-1,parallel%comm,mpinfo)
-   !   ! DO i=1,(average+1)*BLOCK_MBNB,1
-   !   !    IF(i.le.n_temp)THEN
-   !   !       counter=counter+1
-   !   !       parallel%sub2sum(i,j)=counter
-   !   !    ENDIF
-   !   ! ENDDO
-   !   ! ENDDO
-   !   ! print *,"---->",parallel%nstate_proc,parallel%myid
-   !   ! IF(parallel%isroot)print *,"sub2sum",parallel%sub2sum
-   ! ENDSUBROUTINE array_split
-   !---------------------------------------------------------------------
-   Subroutine array_split(nev, ncore, comm, id, nstate_proc, sub2sum)
-   IMPLICIT NONE
-   !in/out
-   INTEGER(I4B),INTENT(IN)  ::  nev, ncore, comm, id
-   INTEGER(I4B),INTENT(OUT) :: nstate_proc
-   INTEGER(I4B), INTENT(OUT), ALLOCATABLE :: sub2sum(:,:)
-   !local
-   INTEGER(I4B)             :: average,redund
-   INTEGER(I4B) :: i, j, n_temp, seq_local, seq_global, max_nstate
-   INTEGER(I4B) :: ierr
-   !
-   IF (nev < 1) THEN
-      IF (parallel%isroot) WRITE(6, '(A,I0)') "[ERROR] array_split: nev must be ≥1 (got ", nev, ")"
-      CALL MPI_ABORT(parallel%comm, 20, ierr)
-   ENDIF
-   IF (ncore < 1) THEN
-      IF (parallel%isroot) WRITE(6, '(A,I0)') "[ERROR] array_split: ncore must be ≥1 (got ", ncore, ")"
-      CALL MPI_ABORT(parallel%comm, 20, ierr)
-   ENDIF
-   !
-   average=nev/ncore
-   redund=mod(nev,ncore)
-   IF(average==0)THEN
-     IF(parallel%isroot)WRITE(6,*)"[ ERROR ]: smaller block or parallel cores"
-     CALL MPI_ABORT(parallel%comm, 20, ierr)
-   ENDIF
-   !
-   IF(id.lt.redund)THEN
-      nstate_proc=average+1
-   ELSE
-      nstate_proc=average
-   ENDIF 
-   max_nstate = MERGE(average+1, average, redund > 0)
-   IF (ALLOCATED(sub2sum)) THEN
-      DEALLOCATE(sub2sum, STAT=ierr)
-      IF (ierr /= 0 .AND. parallel%isroot) THEN
-         WRITE(6, '(A,I0)') "[ERROR] array_split: Deallocate sub2sum failed (ierr=", ierr, ")"
-         CALL MPI_ABORT(parallel%comm, 21, ierr)
+   SUBROUTINE array_split(nev, ncore, comm, id, nstate_proc, sub2sum)
+      USE parameters , ONLY: BLOCK_MBNB
+      IMPLICIT NONE
+      ! in/out
+      INTEGER(I4B),INTENT(IN)  :: nev
+      INTEGER(I4B),INTENT(IN)  :: ncore 
+      INTEGER(I4B),INTENT(IN)  :: comm 
+      INTEGER(I4B),INTENT(IN)  :: id 
+      INTEGER(I4B),INTENT(OUT) :: nstate_proc
+      INTEGER(I4B),ALLOCATABLE,INTENT(OUT) :: sub2sum(:,:)
+      ! local
+      INTEGER(I4B) :: nb, P, N
+      INTEGER(I4B) :: nblocks, k 
+      INTEGER(I4B) :: rank_k
+      INTEGER(I4B) :: istart, iend
+      INTEGER(I4B) :: seq_local, seq_global 
+      INTEGER(I4B) :: i, j
+      INTEGER(I4B) :: average, redund
+      INTEGER(I4B) :: seq_local_per_rank(ncore)
+      !>========================================================
+      ! caculate dimentions of sub2sum
+      nb = BLOCK_MBNB 
+      P  = ncore
+      N  = nev 
+      average = N / (P * nb)
+      IF(average == 0) THEN
+         IF(id == 0) THEN
+               WRITE(6,*)"[ ERROR ]: smaller block or parallel cores (nb=",nb,", P=",P,", N=",N,")"
+         ENDIF
+         STOP
       ENDIF
-   ENDIF
-   ALLOCATE(sub2sum(max_nstate, ncore), STAT=ierr)
-   IF (ierr /= 0) THEN
-      IF (parallel%isroot) WRITE(6, '(A,I0,A,I0)') &
-         "[ERROR] array_split: Allocate sub2sum failed (size=", max_nstate, "×", ncore, "), ierr=", ierr
-      CALL MPI_ABORT(parallel%comm, 22, ierr)
-   ENDIF
-   sub2sum=-2
-   seq_local=0
-   seq_global=0
-   setmap:DO j=1,ncore,1
-            IF (j-1 .lt. redund) THEN
-               n_temp=average+1
-            ELSE
-               n_temp=average
-            ENDIF
-            DO i= 1,n_temp,1
-               seq_local = seq_local + 1
-               seq_global = seq_global+1
-               sub2sum(seq_local,j) = seq_global
-               if(seq_global == nev) exit setmap
-            ENDDO
-            seq_local=0
-      ENDDO setmap
+      redund = MOD(N, P * nb)
+      ALLOCATE(sub2sum((average+1)*nb, P))
+      sub2sum = -2
+      ! caculate sub2sum
+      seq_local_per_rank = 0
+      nblocks = CEILING(REAL(N)/REAL(nb))
+      seq_global = 0
+      DO k = 0, nblocks-1
+         rank_k = MOD(k, P)
+         istart = k * nb + 1
+         iend   = MIN((k+1)*nb, N)
+         DO j = istart, iend 
+            seq_local_per_rank(rank_k + 1) = seq_local_per_rank(rank_k + 1) + 1
+            sub2sum(seq_local_per_rank(rank_k + 1), rank_k + 1) = j
+         ENDDO
+      ENDDO
+      ! caculate nstate_proc
+      nstate_proc = 0
+      DO j = 1, SIZE(sub2sum,1)
+         IF(sub2sum(j, id+1) /= -2) THEN
+               nstate_proc = nstate_proc + 1
+         ENDIF
+      ENDDO
+      ! PRINT*,'peocess',parallel%myid,'nstate_proc, sub2sum=',nstate_proc, sub2sum(:,id+1)
+   ENDSUBROUTINE array_split
+   !---------------------------------------------------------------------
+!    Subroutine array_split(nev, ncore, comm, id, nstate_proc, sub2sum)
+!    IMPLICIT NONE
+!    !in/out
+!    INTEGER(I4B),INTENT(IN)  ::  nev, ncore, comm, id
+!    INTEGER(I4B),INTENT(OUT) :: nstate_proc
+!    INTEGER(I4B), INTENT(OUT), ALLOCATABLE :: sub2sum(:,:)
+!    !local
+!    INTEGER(I4B)             :: average,redund
+!    INTEGER(I4B) :: i, j, n_temp, seq_local, seq_global, max_nstate
+!    INTEGER(I4B) :: ierr
+!    !
+!    IF (nev < 1) THEN
+!       IF (parallel%isroot) WRITE(6, '(A,I0)') "[ERROR] array_split: nev must be ≥1 (got ", nev, ")"
+!       CALL MPI_ABORT(parallel%comm, 20, ierr)
+!    ENDIF
+!    IF (ncore < 1) THEN
+!       IF (parallel%isroot) WRITE(6, '(A,I0)') "[ERROR] array_split: ncore must be ≥1 (got ", ncore, ")"
+!       CALL MPI_ABORT(parallel%comm, 20, ierr)
+!    ENDIF
+!    !
+!    average=nev/ncore
+!    redund=mod(nev,ncore)
+!    IF(average==0)THEN
+!      IF(parallel%isroot)WRITE(6,*)"[ ERROR ]: smaller block or parallel cores"
+!      CALL MPI_ABORT(parallel%comm, 20, ierr)
+!    ENDIF
+!    !
+!    IF(id.lt.redund)THEN
+!       nstate_proc=average+1
+!    ELSE
+!       nstate_proc=average
+!    ENDIF 
+!    max_nstate = MERGE(average+1, average, redund > 0)
+!    IF (ALLOCATED(sub2sum)) THEN
+!       DEALLOCATE(sub2sum, STAT=ierr)
+!       IF (ierr /= 0 .AND. parallel%isroot) THEN
+!          WRITE(6, '(A,I0)') "[ERROR] array_split: Deallocate sub2sum failed (ierr=", ierr, ")"
+!          CALL MPI_ABORT(parallel%comm, 21, ierr)
+!       ENDIF
+!    ENDIF
+!    ALLOCATE(sub2sum(max_nstate, ncore), STAT=ierr)
+!    IF (ierr /= 0) THEN
+!       IF (parallel%isroot) WRITE(6, '(A,I0,A,I0)') &
+!          "[ERROR] array_split: Allocate sub2sum failed (size=", max_nstate, "×", ncore, "), ierr=", ierr
+!       CALL MPI_ABORT(parallel%comm, 22, ierr)
+!    ENDIF
+!    sub2sum=-2
+!    seq_local=0
+!    seq_global=0
+!    setmap:DO j=1,ncore,1
+!             IF (j-1 .lt. redund) THEN
+!                n_temp=average+1
+!             ELSE
+!                n_temp=average
+!             ENDIF
+!             DO i= 1,n_temp,1
+!                seq_local = seq_local + 1
+!                seq_global = seq_global+1
+!                sub2sum(seq_local,j) = seq_global
+!                if(seq_global == nev) exit setmap
+!             ENDDO
+!             seq_local=0
+!       ENDDO setmap
 
-   IF (seq_global /= nev .AND. parallel%isroot) THEN
-      WRITE(6, '(A,I0,A,I0)') "[WARNING] array_split: Mapped states (", seq_global, ") ≠ total nev (", nev, ")"
-   ENDIF
-  ENDSUBROUTINE array_split
+!    IF (seq_global /= nev .AND. parallel%isroot) THEN
+!       WRITE(6, '(A,I0,A,I0)') "[WARNING] array_split: Mapped states (", seq_global, ") ≠ total nev (", nev, ")"
+!    ENDIF
+!   ENDSUBROUTINE array_split
    !---------------------------------------------------------------------
    SUBROUTINE grid_split(ngrid,ncore,comm,id,grid_range,recvcounts,displs,gridrange_sum)
      IMPLICIT NONE

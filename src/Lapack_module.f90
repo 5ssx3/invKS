@@ -649,7 +649,7 @@ ENDMODULE Lapack_module
 MODULE ScaLapack_module
    USE mpi
    USE smpi_math_module
-   USE parameters, ONLY: nev
+   USE parameters, ONLY: nev, BLOCK_MBNB
    USE constants
    IMPLICIT NONE
    INTEGER(I4B) :: MYROW, MYCOL
@@ -933,11 +933,11 @@ CONTAINS
          info = -2
          GOTO 999
       ENDIF
-      IF (MOD(nev, NPCOL) /= 0) THEN
-         info = -3
-         WRITE(*, '(A,I0,A,I0,A,I0)') 'commy proc ', parallel%commy_myid,': nev=',nev,' not divisible by NPCOL=',NPCOL
-         GOTO 999
-      ENDIF
+      ! IF (MOD(nev, NPCOL) /= 0) THEN
+      !    info = -3
+      !    WRITE(*, '(A,I0,A,I0,A,I0)') 'commy proc ', parallel%commy_myid,': nev=',nev,' not divisible by NPCOL=',NPCOL
+      !    GOTO 999
+      ! ENDIF
       !
       SELECT CASE(opA_up)
          CASE('N')
@@ -956,7 +956,7 @@ CONTAINS
       M_A = SIZE(matA, 1, KIND=I4B)
       N_A = nev
       MB_A = M_A
-      NB_A = parallel%nstate_proc
+      NB_A = BLOCK_MBNB
       LLD_A = SIZE(matA, 1, KIND=I4B)
       CALL DESCINIT(desc_matA, M_A, N_A, MB_A, NB_A, 0, 0, blacs_context, LLD_A, info)
       IF (info /= 0) THEN 
@@ -965,7 +965,7 @@ CONTAINS
       M_B = SIZE(matB, 1, KIND=I4B)
       N_B = nev
       MB_B = M_B
-      NB_B = parallel%nstate_proc
+      NB_B = BLOCK_MBNB
       LLD_B = SIZE(matB, 1, KIND=I4B)
       CALL DESCINIT(desc_matB, M_B, N_B, MB_B, NB_B, 0, 0, blacs_context, LLD_B, info)
       IF (info /= 0) THEN
@@ -974,14 +974,14 @@ CONTAINS
       M_C = M
       N_C = N
       MB_C = M_C
-      NB_C = parallel%nstate_proc
+      NB_C = BLOCK_MBNB
       LLD_C = M_C
-      IF (SIZE(matC,1,KIND=I4B) /= LLD_C .OR. SIZE(matC,2,KIND=I4B) /= NB_C) THEN
-         info = -5
-         WRITE(*, '(A,I0,A,I0,A,I0,A,I0,A,I0)') 'commy proc ', parallel%commy_myid, &
-            ': matC dim (', SIZE(matC,1), ',', SIZE(matC,2), ') ≠ expected (', LLD_C, ',', NB_C, ')'
-         GOTO 999
-      ENDIF
+      ! IF (SIZE(matC,1,KIND=I4B) /= LLD_C .OR. SIZE(matC,2,KIND=I4B) /= NB_C) THEN
+      !    info = -5
+      !    WRITE(*, '(A,I0,A,I0,A,I0,A,I0,A,I0)') 'commy proc ', parallel%commy_myid, &
+      !       ': matC dim (', SIZE(matC,1), ',', SIZE(matC,2), ') ≠ expected (', LLD_C, ',', NB_C, ')'
+      !    GOTO 999
+      ! ENDIF
       CALL DESCINIT(desc_matC, M_C, N_C, MB_C, NB_C, 0, 0, blacs_context, LLD_C, info)
       IF (info /= 0) THEN 
          WRITE(*,*) 'commy proc ', parallel%commy_myid,': DESCINIT matC failed, info=',info; GOTO 999 
@@ -1057,11 +1057,11 @@ CONTAINS
          GOTO 999
       ENDIF
       !
-      IF (MOD(nev, NPCOL) /= 0) THEN
-         info = -3
-         WRITE(*, '(A,I0,A,I0,A,I0)') 'commy proc ', parallel%commy_myid,': nev=',nev,' not divisible by NPCOL=',NPCOL
-         GOTO 999
-      ENDIF
+      ! IF (MOD(nev, NPCOL) /= 0) THEN
+      !    info = -3
+      !    WRITE(*, '(A,I0,A,I0,A,I0)') 'commy proc ', parallel%commy_myid,': nev=',nev,' not divisible by NPCOL=',NPCOL
+      !    GOTO 999
+      ! ENDIF
       !
       SELECT CASE(opA_up)
          CASE('N')
@@ -1080,7 +1080,7 @@ CONTAINS
       M_A = SIZE(matA, 1, KIND=I4B)
       N_A = nev
       MB_A = M_A
-      NB_A = parallel%nstate_proc
+      NB_A = BLOCK_MBNB
       LLD_A = SIZE(matA, 1, KIND=I4B)
       CALL DESCINIT(desc_matA, M_A, N_A, MB_A, NB_A, 0, 0, blacs_context, LLD_A, info)
       IF (info /= 0) THEN 
@@ -1089,7 +1089,7 @@ CONTAINS
       M_B = SIZE(matB, 1, KIND=I4B)
       N_B = nev
       MB_B = M_B
-      NB_B = parallel%nstate_proc
+      NB_B = BLOCK_MBNB
       LLD_B = SIZE(matB, 1, KIND=I4B)
       CALL DESCINIT(desc_matB, M_B, N_B, MB_B, NB_B, 0, 0, blacs_context, LLD_B, info)
       IF (info /= 0) THEN
@@ -1098,14 +1098,14 @@ CONTAINS
       M_C = M
       N_C = N
       MB_C = M_C
-      NB_C = parallel%nstate_proc
+      NB_C = BLOCK_MBNB
       LLD_C = M_C
-      IF (SIZE(matC,1,KIND=I4B) /= LLD_C .OR. SIZE(matC,2,KIND=I4B) /= NB_C) THEN
-         info = -5
-         WRITE(*, '(A,I0,A,I0,A,I0,A,I0,A,I0)') 'proc ', parallel%myid, &
-            ': matC dim (', SIZE(matC,1), ',', SIZE(matC,2), ') ≠ expected (', LLD_C, ',', NB_C, ')'
-         GOTO 999
-      ENDIF
+      ! IF (SIZE(matC,1,KIND=I4B) /= LLD_C .OR. SIZE(matC,2,KIND=I4B) /= NB_C) THEN
+      !    info = -5
+      !    WRITE(*, '(A,I0,A,I0,A,I0,A,I0,A,I0)') 'proc ', parallel%myid, &
+      !       ': matC dim (', SIZE(matC,1), ',', SIZE(matC,2), ') ≠ expected (', LLD_C, ',', NB_C, ')'
+      !    GOTO 999
+      ! ENDIF
       CALL DESCINIT(desc_matC, M_C, N_C, MB_C, NB_C, 0, 0, blacs_context, LLD_C, info)
       IF (info /= 0) THEN 
          WRITE(*,*) 'commy proc ', parallel%commy_myid,': DESCINIT matC failed, info=',info; GOTO 999 
